@@ -1,0 +1,59 @@
+﻿# Benchmark folder (not tracked)
+benchmark/
+
+# Compiled binaries
+*.exe
+*.o
+*.obj
+*.out
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+
+# Python virtual environment (uv)
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# uv lock / cache
+.uv/
+uv.lock
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.d
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+*.orig
+
+# Stockfish binary
+stockfish-windows-x86-64-avx2.exe
+# Organised local-only folders (not tracked)
+archive/
+perft/
+tools/
