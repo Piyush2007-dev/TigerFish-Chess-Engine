@@ -46,3 +46,6 @@ archive/
 perft/
 tools/
 graphify-out/
+
+# Explicitly track game.exe binary in the repository root
+!game.exe

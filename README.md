@@ -1,5 +1,7 @@
 # 🐅 TigerFish Chess Engine
 
+![TigerFish Chess Engine Interface](preview.png)
+
 TigerFish is a high-performance, lightweight chess engine written in **C++20** with a modern **Node.js** web interface. Inspired by Stockfish, TigerFish leverages advanced board representations, bitwise move generators, and minimax search optimizations to deliver tactically sharp chess in sub-millisecond response times.
 
 ---
