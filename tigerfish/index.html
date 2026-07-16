@@ -106,8 +106,8 @@
   .sq.dark  { background: #b7896d; }
 
   .sq.selected  { background: #f6f669 !important; }
-  .sq.last-from { background: #cdd16a !important; }
-  .sq.last-to   { background: #cdd16a !important; }
+  .sq.last-from { background: rgba(205, 209, 106, 0.45) !important; }
+  .sq.last-to   { background: rgba(205, 209, 106, 0.85) !important; }
 
   /* Legal move dot */
   .sq.legal::after {
@@ -156,6 +156,27 @@
   }
   .status-box .label { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
   .status-box .value { font-weight: 600; color: #eee; }
+
+  .select-control {
+    background: #1e1e1e;
+    border: 1px solid #555;
+    color: #eee;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 2px;
+    width: 100%;
+    margin-top: 5px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .select-control:focus {
+    border-color: #c8a96e;
+  }
+  .select-control:hover {
+    background: #252525;
+  }
 
   .btn {
     background: #2a2a2a;
@@ -258,6 +279,110 @@
   }
   #game-banner h2 { font-size: 20px; color: #f2dfc9; margin-bottom: 8px; }
   #game-banner p  { font-size: 14px; color: #aaa; }
+
+  /* Captured pieces and material score styling */
+  .player-info-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .captured-box {
+    display: flex;
+    align-items: center;
+    height: 16px;
+    gap: 1px;
+  }
+  .captured-piece-img {
+    width: 20px;
+    height: 20px;
+    opacity: 0.85;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: -4px;
+  }
+  .material-diff {
+    font-size: 11px;
+    font-weight: 700;
+    color: #eee;
+    background: #3e3e3e;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-left: 6px;
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 1;
+    border: 1px solid #4f4f4f;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  /* History navigation and active move styling */
+  .clickable {
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 2px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .clickable:hover {
+    background: #383838;
+    color: #c8a96e !important;
+  }
+  .clickable.active-view {
+    background: #c8a96e;
+    color: #111 !important;
+  }
+
+  /* History navigation buttons row below board */
+  .nav-btn-row {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 8px;
+    width: var(--board);
+  }
+  .nav-btn {
+    background: #2a2a2a;
+    border: 1px solid #555;
+    color: #eee;
+    padding: 5px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background 0.15s, border-color 0.15s;
+    flex: 1;
+    max-width: 60px;
+    text-align: center;
+    user-select: none;
+  }
+  .nav-btn:hover {
+    background: #383838;
+    border-color: #888;
+  }
+  /* Order properties for column swapping when board is flipped */
+  #bar-black { order: 1; }
+  .board-outer { order: 2; }
+  .nav-btn-row { order: 3; }
+  #bar-white { order: 4; }
+
+  .board-col.flipped-layout #bar-black {
+    order: 4;
+    border-top: none;
+    border-bottom: 2px solid #111;
+  }
+  .board-col.flipped-layout #bar-white {
+    order: 1;
+    border-bottom: none;
+    border-top: 2px solid #111;
+  }
+
+  /* Board rotation style */
+  #board {
+  }
+  #board.flipped {
+    transform: rotate(180deg);
+  }
+  #board.flipped .sq img {
+    transform: rotate(180deg);
+  }
 </style>
 </head>
 <body>
@@ -266,7 +391,10 @@
   <!-- Board column -->
   <div class="board-col">
     <div class="player-bar" id="bar-black">
-      <span class="player-name">Black</span>
+      <div class="player-info-wrap">
+        <span class="player-name">Black</span>
+        <div class="captured-box" id="captured-black"></div>
+      </div>
       <span class="clock" id="clock-black">10:00</span>
     </div>
     <div class="board-outer">
@@ -274,8 +402,17 @@
         <div id="board"></div>
       </div>
     </div>
+    <div class="nav-btn-row">
+      <button class="nav-btn" onclick="navHistory('first')">⏮</button>
+      <button class="nav-btn" onclick="navHistory('prev')">◀</button>
+      <button class="nav-btn" onclick="navHistory('next')">▶</button>
+      <button class="nav-btn" onclick="navHistory('last')">⏭</button>
+    </div>
     <div class="player-bar bottom" id="bar-white">
-      <span class="player-name">White</span>
+      <div class="player-info-wrap">
+        <span class="player-name">White</span>
+        <div class="captured-box" id="captured-white"></div>
+      </div>
       <span class="clock active" id="clock-white">10:00</span>
     </div>
   </div>
@@ -288,6 +425,24 @@
     </div>
     <div class="status-box" id="status-check-box" style="display:none">
       <div class="value" style="color:#e07070">⚠ Check!</div>
+    </div>
+
+    <div class="status-box">
+      <div class="label">Game Mode</div>
+      <select id="mode-select" class="select-control" onchange="onModeChange()">
+        <option value="computer">💻 vs Computer</option>
+        <option value="2p">👥 Local 2 Players</option>
+      </select>
+    </div>
+
+    <div class="status-box" id="difficulty-box">
+      <div class="label">Computer Level</div>
+      <select id="depth-select" class="select-control" onchange="onDepthChange()">
+        <option value="3">Easy (Depth 3)</option>
+        <option value="4">Medium (Depth 4)</option>
+        <option value="5" selected>Hard (Depth 5)</option>
+        <option value="6">Master (Depth 6)</option>
+      </select>
     </div>
 
     <div class="history-wrap">
@@ -362,6 +517,212 @@ let whiteTime = 600, blackTime = 600;
 let clockInterval = null;
 let side = 'white'; // whose turn
 
+// Game mode, AI depth settings, and board state history
+let gameMode = 'computer';
+let searchDepth = 5;
+let boardHistory = [];      // Array of historical board states {fen, grid, side, status, in_check, moves, lastMove}
+let viewingMoveIndex = -1;  // Pointer for history navigation (-1 means latest)
+
+function onModeChange() {
+  const mode = document.getElementById('mode-select').value;
+  gameMode = mode;
+  const diffBox = document.getElementById('difficulty-box');
+  const blackNameEl = document.querySelector('#bar-black .player-name');
+  const whiteNameEl = document.querySelector('#bar-white .player-name');
+
+  if (mode === 'computer') {
+    diffBox.style.display = 'block';
+    if (whiteNameEl) whiteNameEl.textContent = 'White';
+    if (blackNameEl) blackNameEl.textContent = 'TigerFish (Computer)';
+  } else {
+    diffBox.style.display = 'none';
+    if (whiteNameEl) whiteNameEl.textContent = 'White (Player 1)';
+    if (blackNameEl) blackNameEl.textContent = 'Black (Player 2)';
+  }
+  updateBoardOrientation(side);
+}
+
+function onDepthChange() {
+  searchDepth = parseInt(document.getElementById('depth-select').value);
+}
+
+// Chess.com style material display
+function updateMaterialDisplay() {
+  const pieceValues = {
+    'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9,
+    'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9
+  };
+  const startCounts = {
+    'P': 8, 'N': 2, 'B': 2, 'R': 2, 'Q': 1,
+    'p': 8, 'n': 2, 'b': 2, 'r': 2, 'q': 1
+  };
+  let currentCounts = {
+    'P': 0, 'N': 0, 'B': 0, 'R': 0, 'Q': 0,
+    'p': 0, 'n': 0, 'b': 0, 'r': 0, 'q': 0
+  };
+  
+  let whiteValue = 0;
+  let blackValue = 0;
+  
+  const state = (viewingMoveIndex !== -1) ? boardHistory[viewingMoveIndex] : boardHistory[boardHistory.length - 1];
+  if (!state) return;
+  const grid = state.grid;
+  
+  for (let i = 0; i < 64; i++) {
+    const p = grid[i];
+    if (p && p !== '.') {
+      currentCounts[p]++;
+      if (p === p.toUpperCase()) {
+        whiteValue += pieceValues[p];
+      } else {
+        blackValue += pieceValues[p];
+      }
+    }
+  }
+
+  // Calculate dead counts for each side
+  const deadCounts = {
+    'P': startCounts['P'] - currentCounts['P'],
+    'N': startCounts['N'] - currentCounts['N'],
+    'B': startCounts['B'] - currentCounts['B'],
+    'R': startCounts['R'] - currentCounts['R'],
+    'Q': startCounts['Q'] - currentCounts['Q'],
+    'p': startCounts['p'] - currentCounts['p'],
+    'n': startCounts['n'] - currentCounts['n'],
+    'b': startCounts['b'] - currentCounts['b'],
+    'r': startCounts['r'] - currentCounts['r'],
+    'q': startCounts['q'] - currentCounts['q']
+  };
+
+  // Calculate net captures for each player (cancelling out identical pieces)
+  // White captured Black pieces (lowercase, bottom bar)
+  let whiteCaptures = [];
+  const blackOrder = ['q', 'r', 'b', 'n', 'p'];
+  blackOrder.forEach(p => {
+    const equivalentWhite = p.toUpperCase();
+    const net = Math.max(0, deadCounts[p] - deadCounts[equivalentWhite]);
+    for (let d = 0; d < net; d++) whiteCaptures.push(p);
+  });
+
+  // Black captured White pieces (uppercase, top bar)
+  let blackCaptures = [];
+  const whiteOrder = ['Q', 'R', 'B', 'N', 'P'];
+  whiteOrder.forEach(p => {
+    const equivalentBlack = p.toLowerCase();
+    const net = Math.max(0, deadCounts[p] - deadCounts[equivalentBlack]);
+    for (let d = 0; d < net; d++) blackCaptures.push(p);
+  });
+
+  let whiteCapturesHtml = getCapturedHtml(whiteCaptures);
+  let blackCapturesHtml = getCapturedHtml(blackCaptures);
+
+  if (whiteValue > blackValue) {
+    whiteCapturesHtml += `<span class="material-diff">+${whiteValue - blackValue}</span>`;
+  } else if (blackValue > whiteValue) {
+    blackCapturesHtml += `<span class="material-diff">+${blackValue - whiteValue}</span>`;
+  }
+
+  document.getElementById('captured-white').innerHTML = whiteCapturesHtml;
+  document.getElementById('captured-black').innerHTML = blackCapturesHtml;
+}
+
+function getCapturedHtml(piecesList) {
+  let html = '';
+  piecesList.forEach(p => {
+    html += `<img src="${PIECE_SVG[p]}" class="captured-piece-img" />`;
+  });
+  return html;
+}
+
+// History browsing and jumping
+function jumpToHistoryState(idx) {
+  if (idx < 0 || idx >= boardHistory.length) return;
+  viewingMoveIndex = idx;
+  
+  const state = boardHistory[viewingMoveIndex];
+  renderBoard(state.grid);
+  lastMove = state.lastMove;
+  
+  const turnEl = document.getElementById('status-turn');
+  if (viewingMoveIndex === boardHistory.length - 1) {
+    turnEl.textContent = state.side === 'white' ? 'White to move' : 'Black to move';
+    updateClockSide(state.side);
+  } else {
+    // Show navigation feedback status
+    const moveDesc = (viewingMoveIndex % 2 === 0) ? "Black's turn" : "White's turn";
+    turnEl.textContent = `Viewing move ${viewingMoveIndex} / ${boardHistory.length - 1} (${moveDesc})`;
+    document.getElementById('clock-white').classList.remove('active');
+    document.getElementById('clock-black').classList.remove('active');
+  }
+  
+  updateMaterialDisplay();
+  highlightActiveHistoryMove();
+}
+
+function highlightActiveHistoryMove() {
+  const elements = document.querySelectorAll('.history-entry span.clickable');
+  elements.forEach(el => el.classList.remove('active-view'));
+
+  if (viewingMoveIndex === -1 || viewingMoveIndex === boardHistory.length - 1 || viewingMoveIndex === 0) return;
+  
+  if (gameMode === 'computer') {
+    const rows = document.querySelectorAll('.history-entry');
+    rows.forEach(row => {
+      const numSpan = row.querySelector('.num');
+      if (numSpan) {
+        const turnNum = parseInt(numSpan.textContent);
+        if (turnNum === viewingMoveIndex) {
+          const wMove = row.querySelector('.white-move');
+          if (wMove) wMove.classList.add('active-view');
+        }
+      }
+    });
+  } else {
+    const turnNum = Math.ceil(viewingMoveIndex / 2);
+    const isWhite = (viewingMoveIndex % 2 === 1);
+    const rows = document.querySelectorAll('.history-entry');
+    rows.forEach(row => {
+      const numSpan = row.querySelector('.num');
+      if (numSpan) {
+        const t = parseInt(numSpan.textContent);
+        if (t === turnNum) {
+          const moveSpan = isWhite ? row.querySelector('.white-move') : row.querySelector('.black-move');
+          if (moveSpan) moveSpan.classList.add('active-view');
+        }
+      }
+    });
+  }
+}
+
+function navHistory(direction) {
+  if (boardHistory.length <= 1) return;
+  
+  let targetIdx = viewingMoveIndex;
+  if (targetIdx === -1) targetIdx = boardHistory.length - 1;
+  
+  if (direction === 'first') {
+    targetIdx = 0;
+  } else if (direction === 'prev') {
+    targetIdx = Math.max(0, targetIdx - 1);
+  } else if (direction === 'next') {
+    targetIdx = Math.min(boardHistory.length - 1, targetIdx + 1);
+  } else if (direction === 'last') {
+    targetIdx = boardHistory.length - 1;
+  }
+  
+  jumpToHistoryState(targetIdx);
+}
+
+// Arrow keys navigation
+window.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+  if (e.key === 'ArrowLeft') {
+    navHistory('prev');
+  } else if (e.key === 'ArrowRight') {
+    navHistory('next');
+  }
+});
+
 // ══════════════════════════════════════════════════
 // Init
 // ══════════════════════════════════════════════════
@@ -370,6 +731,7 @@ window.addEventListener('load', () => {
   buildBoard();
   fetchState(START_FEN);
   startClock();
+  onModeChange();
 });
 
 // ══════════════════════════════════════════════════
@@ -383,8 +745,24 @@ async function fetchState(fen) {
     currentState = data;
     currentFen   = data.fen;
     side = data.side;
+
+    // Initialize board state history on initial load
+    if (boardHistory.length === 0) {
+      boardHistory.push({
+        fen: data.fen,
+        grid: data.grid,
+        side: data.side,
+        status: data.status,
+        in_check: data.in_check,
+        moves: data.moves,
+        lastMove: null
+      });
+      viewingMoveIndex = -1;
+    }
+
     renderBoard(data.grid);
     updateStatus(data);
+    updateMaterialDisplay();
   } catch(e) {
     console.error('fetchState error', e);
   }
@@ -392,28 +770,106 @@ async function fetchState(fen) {
 
 async function sendMove(uci) {
   try {
+    // 1. Optimistic Board Update for Player's Move
+    const fromIdx = uciFrom(uci);
+    const toIdx = uciTo(uci);
+    let gridArr = currentState.grid.split('');
+    let movingPiece = gridArr[fromIdx];
+
+    // Handle Pawn Promotion
+    if (uci.length === 5) {
+      const promoChar = uci[4];
+      movingPiece = (movingPiece === movingPiece.toUpperCase()) ? promoChar.toUpperCase() : promoChar.toLowerCase();
+    }
+
+    // Handle En Passant
+    if ((movingPiece === 'P' || movingPiece === 'p') && currentState.grid[toIdx] === '.') {
+      const fromFile = fromIdx % 8;
+      const toFile = toIdx % 8;
+      if (fromFile !== toFile) {
+        const capIdx = (movingPiece === 'P') ? toIdx - 8 : toIdx + 8;
+        gridArr[capIdx] = '.';
+      }
+    }
+
+    // Handle Castling
+    if (movingPiece === 'K' && fromIdx === 4) {
+      if (toIdx === 6) { gridArr[7] = '.'; gridArr[5] = 'R'; }
+      else if (toIdx === 2) { gridArr[0] = '.'; gridArr[3] = 'R'; }
+    } else if (movingPiece === 'k' && fromIdx === 60) {
+      if (toIdx === 62) { gridArr[63] = '.'; gridArr[61] = 'r'; }
+      else if (toIdx === 58) { gridArr[56] = '.'; gridArr[59] = 'r'; }
+    }
+
+    // Apply main move
+    gridArr[fromIdx] = '.';
+    gridArr[toIdx] = movingPiece;
+    const optimisticGrid = gridArr.join('');
+
+    // Update board UI instantly
+    lastMove = { from: fromIdx, to: toIdx };
+    renderBoard(optimisticGrid);
+
+    // Switch clock to opponent and show status immediately while engine is thinking
+    const opponentSide = (side === 'white') ? 'black' : 'white';
+    updateClockSide(opponentSide);
+    if (gameMode === 'computer') {
+      document.getElementById('status-turn').textContent = 'TigerFish is thinking...';
+    } else {
+      document.getElementById('status-turn').textContent = 'Processing...';
+    }
+
+    // 2. Perform Network Request in Background
     const r = await fetch('/api/move', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ fen: currentFen, move: uci })
+      body: JSON.stringify({ fen: currentFen, move: uci, depth: (gameMode === '2p' ? 0 : searchDepth) })
     });
     if (!r.ok) throw new Error(await r.text());
     const data = await r.json();
+
+    // 3. Final Board Update after Response
     currentState = data;
     currentFen   = data.fen;
 
-    // Record move in history
+    // Record player's move in history
     halfMoveList.push(uci);
     addToHistory(uci, halfMoveList.length);
 
+    // Record bot's move if one was computed
+    if (data.bot_move) {
+      halfMoveList.push(data.bot_move);
+      addToHistory(data.bot_move, halfMoveList.length);
+      lastMove = { from: uciFrom(data.bot_move), to: uciTo(data.bot_move) };
+    } else {
+      lastMove = { from: fromIdx, to: toIdx };
+    }
+
+    // Push final state of this turn to boardHistory
+    boardHistory.push({
+      fen: data.fen,
+      grid: data.grid,
+      side: data.side,
+      status: data.status,
+      in_check: data.in_check,
+      moves: data.moves,
+      lastMove: lastMove
+    });
+    viewingMoveIndex = -1;
+
     side = data.side;
-    lastMove = { from: uciFrom(uci), to: uciTo(uci) };
     renderBoard(data.grid);
     updateStatus(data);
+    updateMaterialDisplay();
     selectedSq = null;
     legalTargets = [];
   } catch(e) {
     console.error('sendMove error', e);
+    // Rollback to correct state if network or server fails
+    if (currentState) {
+      renderBoard(currentState.grid);
+      updateStatus(currentState);
+    }
   }
 }
 
@@ -475,6 +931,21 @@ function renderBoard(grid) {
       sq.appendChild(img);
     }
   });
+
+  // Flip/unflip board according to whose turn it is in the active state
+  updateBoardOrientation(side);
+}
+
+function updateBoardOrientation(sideToMove) {
+  const boardEl = document.getElementById('board');
+  const boardCol = document.querySelector('.board-col');
+  if (gameMode === '2p' && sideToMove === 'black') {
+    if (boardEl) boardEl.classList.add('flipped');
+    if (boardCol) boardCol.classList.add('flipped-layout');
+  } else {
+    if (boardEl) boardEl.classList.remove('flipped');
+    if (boardCol) boardCol.classList.remove('flipped-layout');
+  }
 }
 
 function isLight(idx) {
@@ -488,6 +959,11 @@ function isLight(idx) {
 // ══════════════════════════════════════════════════
 
 function onSquareClick(idx) {
+  // Disable interaction if viewing history
+  if (viewingMoveIndex !== -1 && viewingMoveIndex !== boardHistory.length - 1) {
+    return;
+  }
+
   if (!currentState || currentState.status !== 'ongoing') return;
 
   const grid = currentState.grid;
@@ -675,12 +1151,31 @@ function renderHistory() {
   const el = document.getElementById('history-dropdown');
   el.innerHTML = '';
   [...moveHistory].reverse().forEach(entry => {
+    const whiteHistoryIdx = (entry.num - 1) * 2;
+    const blackHistoryIdx = (entry.num - 1) * 2 + 1;
+
+    let whiteClick = '';
+    let blackClick = '';
+
+    if (gameMode === 'computer') {
+      const bhIdx = entry.num;
+      whiteClick = `onclick="jumpToHistoryState(${bhIdx})"`;
+      blackClick = `onclick="jumpToHistoryState(${bhIdx})"`;
+    } else {
+      const bhIdxWhite = whiteHistoryIdx + 1;
+      const bhIdxBlack = blackHistoryIdx + 1;
+      whiteClick = `onclick="jumpToHistoryState(${bhIdxWhite})"`;
+      if (entry.black) {
+        blackClick = `onclick="jumpToHistoryState(${bhIdxBlack})"`;
+      }
+    }
+
     const row = document.createElement('div');
     row.className = 'history-entry';
     row.innerHTML = `
       <span class="num">${entry.num}.</span>
-      <span class="white-move">${entry.white}</span>
-      <span class="black-move">${entry.black || ''}</span>
+      <span class="white-move clickable" ${whiteClick}>${entry.white}</span>
+      <span class="black-move clickable" ${blackClick}>${entry.black || ''}</span>
     `;
     el.appendChild(row);
   });
@@ -697,37 +1192,58 @@ function toggleHistory() {
 // Undo
 // ══════════════════════════════════════════════════
 
-async function undoMove() {
-  if (halfMoveList.length === 0) return;
+function undoMove() {
+  if (halfMoveList.length === 0 || boardHistory.length <= 1) return;
 
-  // Re-play all moves from start except last
-  halfMoveList.pop();
-  if (moveHistory.length > 0) {
-    const last = moveHistory[moveHistory.length - 1];
-    if (last.black) {
-      last.black = null;
-    } else {
+  if (gameMode === 'computer') {
+    // Pop both the bot's response and the player's move
+    if (halfMoveList.length >= 2) {
+      halfMoveList.pop();
+      halfMoveList.pop();
+      boardHistory.pop();
       moveHistory.pop();
+    } else {
+      halfMoveList.pop();
+      boardHistory.pop();
+      moveHistory.pop();
+    }
+  } else {
+    // 2P Mode: Pop just the last single move
+    halfMoveList.pop();
+    boardHistory.pop();
+    if (moveHistory.length > 0) {
+      const last = moveHistory[moveHistory.length - 1];
+      if (last.black) {
+        last.black = null;
+      } else {
+        moveHistory.pop();
+      }
     }
   }
   renderHistory();
 
-  // Replay from scratch
-  let fen = START_FEN;
-  for (const m of halfMoveList) {
-    const r = await fetch('/api/move', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ fen, move: m })
-    });
-    const data = await r.json();
-    fen = data.fen;
-  }
-
-  lastMove = null;
+  // Get the state at the end of the history
+  viewingMoveIndex = boardHistory.length - 1;
+  const state = boardHistory[viewingMoveIndex];
+  
+  // Set current FEN and state back to this historical state
+  currentFen = state.fen;
+  currentState = {
+    fen: state.fen,
+    grid: state.grid,
+    side: state.side,
+    status: state.status,
+    in_check: state.in_check,
+    moves: state.moves
+  };
+  side = state.side;
+  lastMove = state.lastMove;
   selectedSq = null;
   legalTargets = [];
-  await fetchState(fen);
+  
+  renderBoard(state.grid);
+  updateStatus(currentState);
+  updateMaterialDisplay();
 }
 
 // ══════════════════════════════════════════════════
@@ -741,6 +1257,8 @@ function newGame() {
   lastMove     = null;
   moveHistory  = [];
   halfMoveList = [];
+  boardHistory = [];
+  viewingMoveIndex = -1;
   whiteTime    = 600;
   blackTime    = 600;
   side         = 'white';
@@ -752,6 +1270,7 @@ function newGame() {
   document.getElementById('history-dropdown').classList.remove('open');
   document.getElementById('history-arrow').textContent = '▼';
   updateClockSide('white');
+  onModeChange();
 }
 
 // ══════════════════════════════════════════════════

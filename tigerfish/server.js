@@ -1,22 +1,76 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { execFile } = require('child_process');
+const { spawn } = require('child_process');
 const url = require('url');
 
 const PORT = 8080;
-const ENGINE_EXE = path.join(__dirname, 'chess_engine.exe');
+const ENGINE_EXE = path.join(__dirname, 'game.exe');
 
-// Helper to run C++ subprocess
-function runEngine(args) {
-    return new Promise((resolve, reject) => {
-        execFile(ENGINE_EXE, args, (error, stdout, stderr) => {
-            if (error) {
-                reject(stderr || error.message);
-            } else {
-                resolve(stdout.trim());
+// Spawn the C++ chess engine in interactive mode persistently
+let engineProcess = null;
+let currentResolve = null;
+let stdoutBuffer = '';
+const commandQueue = [];
+let isEngineBusy = false;
+
+function startEngine() {
+    console.log("Spawning persistent TigerFish engine process...");
+    engineProcess = spawn(ENGINE_EXE, ['interactive']);
+
+    engineProcess.stdout.on('data', (data) => {
+        stdoutBuffer += data.toString();
+        const delim = '===READY===';
+        const index = stdoutBuffer.indexOf(delim);
+        if (index !== -1) {
+            const response = stdoutBuffer.substring(0, index).trim();
+            // find the end of the delimiter and any trailing newline characters (\r or \n)
+            let endIdx = index + delim.length;
+            while (endIdx < stdoutBuffer.length && (stdoutBuffer[endIdx] === '\r' || stdoutBuffer[endIdx] === '\n')) {
+                endIdx++;
             }
-        });
+            stdoutBuffer = stdoutBuffer.substring(endIdx);
+            if (currentResolve) {
+                currentResolve(response);
+                currentResolve = null;
+            }
+        }
+    });
+
+    engineProcess.stderr.on('data', (data) => {
+        console.error(`Engine stderr: ${data}`);
+    });
+
+    engineProcess.on('close', (code) => {
+        console.log(`Engine process exited with code ${code}. Restarting...`);
+        isEngineBusy = false;
+        stdoutBuffer = '';
+        if (currentResolve) {
+            currentResolve(JSON.stringify({ error: "Engine crashed" }));
+            currentResolve = null;
+        }
+        startEngine();
+    });
+}
+
+startEngine();
+
+function executeQueue() {
+    if (isEngineBusy || commandQueue.length === 0) return;
+    isEngineBusy = true;
+    const { cmd, resolve } = commandQueue.shift();
+    currentResolve = (response) => {
+        isEngineBusy = false;
+        resolve(response);
+        executeQueue(); // Process next queued command
+    };
+    engineProcess.stdin.write(cmd + '\n');
+}
+
+function sendCommand(cmd) {
+    return new Promise((resolve) => {
+        commandQueue.push({ cmd, resolve });
+        executeQueue();
     });
 }
 
@@ -60,7 +114,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         try {
-            const output = await runEngine(['moves', fen]);
+            const output = await sendCommand(`moves ${fen}`);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(output);
         } catch (err) {
@@ -77,18 +131,15 @@ const server = http.createServer(async (req, res) => {
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
-                const { fen, move } = data;
+                const { fen, move, depth } = data;
                 if (!fen || !move) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Missing FEN or move in request body' }));
                     return;
                 }
 
-                // 1. Play move
-                const newFen = await runEngine(['make', fen, move]);
-
-                // 2. Get state for the new position
-                const output = await runEngine(['moves', newFen]);
+                const searchDepth = (depth !== undefined) ? parseInt(depth) : 6;
+                const output = await sendCommand(`make ${move} ${searchDepth} ${fen}`);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(output);
