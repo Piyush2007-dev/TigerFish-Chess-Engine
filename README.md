@@ -48,7 +48,7 @@ Unlike standard engines that spawn a process per turn, TigerFish launches `game.
 ### 1. Compile the C++ Engine
 Compile the engine source code with high optimization flags from the repository root:
 ```bash
-g++ -O3 -std=c++20 engine/game.cpp -o game.exe
+g++ -O3 -std=c++20 engine/main.cpp -o game.exe
 ```
 
 ### 2. Start the Server
@@ -65,18 +65,63 @@ http://127.0.0.1:8080
 
 ---
 
+## 🏗️ 5-Layer Pyramid Architecture
+
+```
+ ┌────────────────────────────────────────────────────────┐
+ │                    LAYER 5: ENGINE                     │
+ │  File: search.cpp, main.cpp                            │
+ │  Classes: Engine, main() CLI entry point               │
+ │  Functions: evaluate(), minimax(), best_move()         │
+ └───────────────────────────┬────────────────────────────┘
+                             │ depends down on
+                             ▼
+ ┌────────────────────────────────────────────────────────┐
+ │            LAYER 4: MOVE GENERATION & RULES            │
+ │  File: rules.cpp                                       │
+ │  Classes & Structs: MoveGenerator, MoveList, PinInfo   │
+ │  Free Functions: is_in_check(), get_game_result(),     │
+ │                  is_insufficient_material()            │
+ └───────────────────────────┬────────────────────────────┘
+                             │ depends down on
+                             ▼
+ ┌────────────────────────────────────────────────────────┐
+ │                 LAYER 3: BOARD STATE                   │
+ │  File: board.cpp                                       │
+ │  Class: Board                                          │
+ │  Functions: make_move(), unmake_move(), set_fen(),    │
+ │             print_board(), get_ray()                   │
+ └───────────────────────────┬────────────────────────────┘
+                             │ depends down on
+                             ▼
+ ┌────────────────────────────────────────────────────────┐
+ │                LAYER 2: CORE MOVE DATA                 │
+ │  File: board.cpp                                       │
+ │  Class: Move                                           │
+ │  Functions: Move::pack(), Move::to_uci(), move_to_uci()│
+ └───────────────────────────┬────────────────────────────┘
+                             │ depends down on
+                             ▼
+ ┌────────────────────────────────────────────────────────┐
+ │          LAYER 1: ENUMS, MASKS & LOOKUP TABLES         │
+ │  Files: board.cpp, magic_lut.cpp, eval_lut.cpp         │
+ │  Enums: Piece, Color, Direction, CastleRights,         │
+ │         GameResult                                     │
+ │  Tables: ray_table, PST arrays, Magic Bitboards        │
+ └────────────────────────────────────────────────────────┘
+```
+
 ## 📁 Repository Structure
 ```
-├── engine/                 # C++20 Chess Engine Source
-│   ├── chess.cpp           # Board structure & FEN parser
-│   ├── game.cpp            # Main C++ engine entry point
-│   ├── magic_lut.cpp       # Precomputed magic numbers lookup
-│   ├── move_finder.cpp     # Minimax search & evaluation
-│   ├── move_generator.cpp  # Bitboard move generator
-│   └── pst_lut.cpp         # Piece-Square Tables (PST) lookup
-├── archive/                # Older binary backups (Ignored by Git)
+├── engine/                 # C++20 5-Layer Chess Engine Source
+│   ├── board.cpp           # Layer 2 & 3: Board state, Move packing, FEN parser
+│   ├── rules.cpp           # Layer 4: MoveGenerator, MoveList, Rules (check, checkmate, draw)
+│   ├── search.cpp          # Layer 5: Minimax search & position evaluation (Engine)
+│   ├── main.cpp            # Entry Point: CLI interface & main process
+│   ├── magic_lut.cpp       # Layer 1: Precomputed magic bitboards lookup
+│   └── eval_lut.cpp        # Layer 1: Evaluation tables (PIECE_VALUE, PST)
 ├── index.html              # Frontend Chessboard UI
 ├── server.js               # Node.js backend API
-├── .gitignore              # Git ignored files & folders
+├── game.exe                # Compiled C++ Engine Binary
 └── README.md               # You are here!
 ```

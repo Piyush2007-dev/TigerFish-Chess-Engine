@@ -1,18 +1,13 @@
 // ══════════════════════════════════════════════════════════════
-// game.cpp — Entry point for TigerFish chess engine
+// main.cpp — Entry point for TigerFish chess engine
 //
-// Includes the full engine library (chess.cpp) and exposes a
-// CLI interface used by server.js via child_process.execFile().
-//
-// Commands:
-//   chess.exe moves "<fen>"          → JSON: board state + legal moves
-//   chess.exe make   "<fen>" "<uci>" → plain text: new FEN after move
-//   chess.exe best   "<fen>" [depth] → JSON: { "best_move": "e2e4" }
+// Includes search.cpp (which pulls in rules.cpp, board.cpp,
+// magic_lut.cpp, eval_lut.cpp) and exposes CLI for server.js.
 //
 // Compile:
-//   g++ -O2 -std=c++17 -o chess.exe game.cpp
+//   g++ -O2 -std=c++20 -o game.exe engine/main.cpp
 // ══════════════════════════════════════════════════════════════
-#include "chess.cpp"   
+#include "search.cpp"   
 int main(int argc, char* argv[]) {
     init_rays();
     init_magics();
@@ -46,7 +41,7 @@ int main(int argc, char* argv[]) {
             grid += (p == (Piece)0xF) ? '.' : piece_chars[p];
         }
 
-        GameResult result = board.get_game_result();
+        GameResult result = get_game_result(board);
         string status_str = "ongoing";
         if      (result == GAME_CHECKMATE)              status_str = "checkmate";
         else if (result == GAME_STALEMATE)              status_str = "stalemate";
@@ -58,7 +53,7 @@ int main(int argc, char* argv[]) {
         cout << "  \"fen\": \""    << board.to_fen() << "\"," << endl;
         cout << "  \"side\": \""   << (board.side_to_move == WHITE ? "white" : "black") << "\"," << endl;
         cout << "  \"status\": \"" << status_str << "\"," << endl;
-        cout << "  \"in_check\": " << (board.is_in_check() ? "true" : "false") << "," << endl;
+        cout << "  \"in_check\": " << (is_in_check(board) ? "true" : "false") << "," << endl;
         cout << "  \"grid\": \""   << grid << "\"," << endl;
         cout << "  \"moves\": ["   << endl;
         for (int i = 0; i < moves.size(); ++i) {
@@ -102,18 +97,17 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        board.make_move(matched_move, moves);
+        board.make_move(matched_move);
 
         // Auto-run bot move search on the same board if game is ongoing
         string bot_move_uci = "";
-        if (board.get_game_result() == GAME_ONGOING) {
+        if (get_game_result(board) == GAME_ONGOING) {
             int depth = (argc >= 5) ? atoi(argv[4]) : 6;
             Engine engine;
             Move best = engine.best_move(board, depth);
             if (best.value != 0) {
                 bot_move_uci = move_to_uci(best);
-                MoveList dummy;
-                board.make_move(best, dummy);
+                board.make_move(best);
             }
         }
 
@@ -128,7 +122,7 @@ int main(int argc, char* argv[]) {
             grid += (p == (Piece)0xF) ? '.' : piece_chars[p];
         }
 
-        GameResult result = board.get_game_result();
+        GameResult result = get_game_result(board);
         string status_str = "ongoing";
         if      (result == GAME_CHECKMATE)              status_str = "checkmate";
         else if (result == GAME_STALEMATE)              status_str = "stalemate";
@@ -140,7 +134,7 @@ int main(int argc, char* argv[]) {
         cout << "  \"fen\": \""    << board.to_fen() << "\"," << endl;
         cout << "  \"side\": \""   << (board.side_to_move == WHITE ? "white" : "black") << "\"," << endl;
         cout << "  \"status\": \"" << status_str << "\"," << endl;
-        cout << "  \"in_check\": " << (board.is_in_check() ? "true" : "false") << "," << endl;
+        cout << "  \"in_check\": " << (is_in_check(board) ? "true" : "false") << "," << endl;
         cout << "  \"grid\": \""   << grid << "\"," << endl;
         if (!bot_move_uci.empty()) {
             cout << "  \"bot_move\": \"" << bot_move_uci << "\"," << endl;
@@ -195,7 +189,7 @@ int main(int argc, char* argv[]) {
         board.print_board();
 
         while (true) {
-            GameResult result = board.get_game_result();
+            GameResult result = get_game_result(board);
             if (result != GAME_ONGOING) {
                 cout << "\nGame Over! ";
                 if (result == GAME_CHECKMATE) {
@@ -255,11 +249,11 @@ int main(int argc, char* argv[]) {
                 continue;
             }
 
-            board.make_move(matched_move, moves);
+            board.make_move(matched_move);
             cout << endl;
             board.print_board();
 
-            result = board.get_game_result();
+            result = get_game_result(board);
             if (result != GAME_ONGOING) continue;
 
             cout << "\nTigerFish is thinking (depth " << depth << ")..." << endl;
@@ -267,8 +261,7 @@ int main(int argc, char* argv[]) {
             Move best = engine.best_move(board, depth);
             if (best.value != 0) {
                 cout << "TigerFish plays: " << move_to_uci(best) << endl;
-                MoveList dummy;
-                board.make_move(best, dummy);
+                board.make_move(best);
                 cout << endl;
                 board.print_board();
             } else {
@@ -307,7 +300,7 @@ int main(int argc, char* argv[]) {
                     grid += (p == (Piece)0xF) ? '.' : piece_chars[p];
                 }
                 
-                GameResult result = board.get_game_result();
+                GameResult result = get_game_result(board);
                 string status_str = "ongoing";
                 if      (result == GAME_CHECKMATE)              status_str = "checkmate";
                 else if (result == GAME_STALEMATE)              status_str = "stalemate";
@@ -319,7 +312,7 @@ int main(int argc, char* argv[]) {
                 cout << "  \"fen\": \""    << board.to_fen() << "\"," << endl;
                 cout << "  \"side\": \""   << (board.side_to_move == WHITE ? "white" : "black") << "\"," << endl;
                 cout << "  \"status\": \"" << status_str << "\"," << endl;
-                cout << "  \"in_check\": " << (board.is_in_check() ? "true" : "false") << "," << endl;
+                cout << "  \"in_check\": " << (is_in_check(board) ? "true" : "false") << "," << endl;
                 cout << "  \"grid\": \""   << grid << "\"," << endl;
                 cout << "  \"moves\": ["   << endl;
                 for (int i = 0; i < moves.size(); ++i) {
@@ -362,16 +355,15 @@ int main(int argc, char* argv[]) {
                     continue;
                 }
                 
-                board.make_move(matched_move, moves);
+                board.make_move(matched_move);
                 
                 string bot_move_uci = "";
-                if (depth > 0 && board.get_game_result() == GAME_ONGOING) {
+                if (depth > 0 && get_game_result(board) == GAME_ONGOING) {
                     Engine engine;
                     Move best = engine.best_move(board, depth);
                     if (best.value != 0) {
                         bot_move_uci = move_to_uci(best);
-                        MoveList dummy;
-                        board.make_move(best, dummy);
+                        board.make_move(best);
                     }
                 }
                 
@@ -385,7 +377,7 @@ int main(int argc, char* argv[]) {
                     grid += (p == (Piece)0xF) ? '.' : piece_chars[p];
                 }
                 
-                GameResult result = board.get_game_result();
+                GameResult result = get_game_result(board);
                 string status_str = "ongoing";
                 if      (result == GAME_CHECKMATE)              status_str = "checkmate";
                 else if (result == GAME_STALEMATE)              status_str = "stalemate";
@@ -397,7 +389,7 @@ int main(int argc, char* argv[]) {
                 cout << "  \"fen\": \""    << board.to_fen() << "\"," << endl;
                 cout << "  \"side\": \""   << (board.side_to_move == WHITE ? "white" : "black") << "\"," << endl;
                 cout << "  \"status\": \"" << status_str << "\"," << endl;
-                cout << "  \"in_check\": " << (board.is_in_check() ? "true" : "false") << "," << endl;
+                cout << "  \"in_check\": " << (is_in_check(board) ? "true" : "false") << "," << endl;
                 cout << "  \"grid\": \""   << grid << "\"," << endl;
                 if (!bot_move_uci.empty()) {
                     cout << "  \"bot_move\": \"" << bot_move_uci << "\"," << endl;

@@ -1,16 +1,13 @@
 #pragma once
-#include "chess.cpp"
-#include "pst_lut.cpp"
+#include "rules.cpp"
+#include "eval_lut.cpp"
 
 #include <vector>
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
 
-struct ScoredMove {
-    Move move;
-    int score;
-};
+using namespace std;
 
 class Engine {
 public:
@@ -59,7 +56,7 @@ public:
         mg.generate_moves(board,moves);
 
         if(moves.size()==0){
-            if(board.is_in_check()){
+            if(is_in_check(board)){
                 return maximizing?(-20000-depth):(20000+depth);
             }
             return 0;
@@ -69,9 +66,7 @@ public:
             int best=-100000;
             
             for(int i=0;i<moves.size();i++){
-                MoveList dummy;
-                
-                board.make_move(moves.move_list[i],dummy);
+                board.make_move(moves.move_list[i]);
                 int score=minimax(board,depth-1,alpha,beta,false);
                 board.unmake_move();
                 
@@ -85,9 +80,7 @@ public:
             int best=100000;
             
             for(int i=0;i<moves.size();i++){
-                MoveList dummy;
-                
-                board.make_move(moves.move_list[i],dummy);
+                board.make_move(moves.move_list[i]);
                 int score=minimax(board,depth-1,alpha,beta,true);
                 board.unmake_move();
                 
@@ -112,44 +105,34 @@ public:
         }
 
         bool maximizing=(board.side_to_move==WHITE);
-        std::vector<ScoredMove> scored_moves;
 
+        int best_score = maximizing ? -100000 : 100000;
         for(int i=0;i<moves.size();i++){
-            MoveList dummy;
-            
-            board.make_move(moves.move_list[i],dummy);
+            board.make_move(moves.move_list[i]);
             int score=minimax(board,depth-1,-100000,100000,!maximizing);
             board.unmake_move();
 
-            scored_moves.push_back({moves.move_list[i], score});
-        }
-
-        if (maximizing) {
-            std::sort(scored_moves.begin(), scored_moves.end(), [](const ScoredMove& a, const ScoredMove& b) {
-                return a.score > b.score;
-            });
-        } else {
-            std::sort(scored_moves.begin(), scored_moves.end(), [](const ScoredMove& a, const ScoredMove& b) {
-                return a.score < b.score;
-            });
+            moves.scores[i] = score;
+            if (maximizing) {
+                if (score > best_score) best_score = score;
+            } else {
+                if (score < best_score) best_score = score;
+            }
         }
 
         // Only choose randomly from moves that are within 50 centipawns (0.5 pawn value) of the best move.
         // This ensures the computer plays tactically strong moves while maintaining game variety.
-        int best_score = scored_moves[0].score;
-        std::vector<Move> candidates;
+        vector<Move> candidates;
         const int THRESHOLD = 50;
 
-        for (const auto& sm : scored_moves) {
-            int diff = std::abs(sm.score - best_score);
+        for (int i=0; i<moves.size(); i++) {
+            int diff = abs(moves.scores[i] - best_score);
             if (diff <= THRESHOLD) {
-                candidates.push_back(sm.move);
-            } else {
-                break;
+                candidates.push_back(moves.move_list[i]);
             }
         }
 
-        int limit = std::min(5, (int)candidates.size());
+        int limit = min(5, (int)candidates.size());
         
         static bool seeded = false;
         if (!seeded) {

@@ -59,12 +59,22 @@ enum GameResult{
 };
 
 
+inline uint64_t NOT_A_FILE=0xFEFEFEFEFEFEFEFEULL;
+inline uint64_t NOT_H_FILE=0x7F7F7F7F7F7F7F7FULL;
+inline uint64_t NOT_AB_FILE=0xFCFCFCFCFCFCFCFCULL;
+inline uint64_t NOT_GH_FILE=0x3F3F3F3F3F3F3F3FULL;
+
+inline uint64_t RANK_1=0x00000000000000FFULL;
+inline uint64_t RANK_2=0x000000000000FF00ULL;
+inline uint64_t RANK_7=0x00FF000000000000ULL;
+inline uint64_t RANK_8=0xFF00000000000000ULL;
+
 inline int lsb_index(uint64_t mask){
-    return countr_zero(mask);
+    return std::countr_zero(mask);
 }
 
 inline int msb_index(uint64_t mask){
-    return 63-countl_zero(mask);
+    return 63-std::countl_zero(mask);
 }
 
 inline int pop_lsb(uint64_t &mask){
@@ -83,16 +93,6 @@ inline void print_bitboard(uint64_t bb){
     }
     cout<<'\n';
 }
-
-inline uint64_t NOT_A_FILE=0xFEFEFEFEFEFEFEFEULL;
-inline uint64_t NOT_H_FILE=0x7F7F7F7F7F7F7F7FULL;
-inline uint64_t NOT_AB_FILE=0xFCFCFCFCFCFCFCFCULL;
-inline uint64_t NOT_GH_FILE=0x3F3F3F3F3F3F3F3FULL;
-
-inline uint64_t RANK_1=0x00000000000000FFULL;
-inline uint64_t RANK_2=0x000000000000FF00ULL;
-inline uint64_t RANK_7=0x00FF000000000000ULL;
-inline uint64_t RANK_8=0xFF00000000000000ULL;
 
 #include "magic_lut.cpp"
 
@@ -137,53 +137,46 @@ public:
     static Color side(Move m){
         return (Color)((m.value>>31)&0x1u);
     }
-};
-
-struct PackedMove{
-    Piece piece;
-    int from_square;
-    int to_square;
-    
-    uint32_t captured_piece=0xFu;
-    uint32_t promotion_piece=0xFu;
-    
-    bool is_castle=false;
-    bool is_en_passant=false;
-    bool is_double_push=false;
-    
-    static uint32_t pack(PackedMove d){
+    static uint32_t pack(int from_square,int to_square,Piece piece,
+                         uint32_t captured_piece=0xFu,uint32_t promotion_piece=0xFu,
+                         bool is_castle=false,bool is_en_passant=false,bool is_double_push=false){
         uint32_t m=0;
-        
-        m=((uint32_t)d.from_square&0x3Fu);
-        m|=(((uint32_t)d.to_square&0x3Fu)<<6);
-        m|=(((uint32_t)d.piece&0xFu)<<12);
-        m|=((d.captured_piece&0xFu)<<16);
-        m|=((d.promotion_piece&0xFu)<<20);
-        
-        if(d.is_castle)m|=1u<<28;
-        if(d.is_en_passant)m|=1u<<29;
-        if(d.is_double_push)m|=1u<<30;
-        
+        m=((uint32_t)from_square&0x3Fu);
+        m|=(((uint32_t)to_square&0x3Fu)<<6);
+        m|=(((uint32_t)piece&0xFu)<<12);
+        m|=((captured_piece&0xFu)<<16);
+        m|=((promotion_piece&0xFu)<<20);
+        if(is_castle)m|=1u<<28;
+        if(is_en_passant)m|=1u<<29;
+        if(is_double_push)m|=1u<<30;
         return m;
     }
+    static string to_uci(Move m){
+        int f=from(m);
+        int t=to(m);
+        
+        string uci="";
+        uci+=(char)('a'+(f%8));
+        uci+=(char)('1'+(f/8));
+        uci+=(char)('a'+(t%8));
+        uci+=(char)('1'+(t/8));
+        
+        if(is_promotion(m)){
+            Piece promo=promotion_piece(m);
+            
+            if(promo==Piece::N||promo==Piece::n)uci+='n';
+            else if(promo==Piece::B||promo==Piece::b)uci+='b';
+            else if(promo==Piece::R||promo==Piece::r)uci+='r';
+            else if(promo==Piece::Q||promo==Piece::q)uci+='q';
+        }
+        
+        return uci;
+    }
 };
 
-struct MoveList{
-    Move move_list[218];
-    int count=0;
-    
-    void clear(){
-        count=0;
-    }
-    void push(Move m){
-        move_list[count++]=m;
-    }
-    int size(){
-        return count;
-    }
-};
-
-class MoveGenerator;
+inline string move_to_uci(Move m){
+    return Move::to_uci(m);
+}
 
 class Board{
 public:
@@ -204,10 +197,6 @@ public:
     vector<uint8_t> ep_history;
     vector<uint8_t> halfmove_history;
 
-    bool is_in_check();
-    bool is_insufficient_material() const;
-    GameResult get_game_result();
-    
     inline uint64_t get_ray(int direction,int square){
         return ray_table[direction][square];
     }
@@ -407,22 +396,14 @@ public:
         if(all_occ!=board.occupancy[2])cout<<"ALL OCC MISMATCH\n";
     }
 
-    void make_move(Move move,MoveList &moves){
+    void make_move(Move move){
         Color enemy=(side_to_move==WHITE)?BLACK:WHITE;
         
         Move packed_undo_move;
-        PackedMove undo_data;
-        
-        undo_data.piece=Move::piece(move);
-        undo_data.from_square=Move::from(move);
-        undo_data.to_square=Move::to(move);
-        undo_data.captured_piece=Move::captured_piece(move);
-        undo_data.promotion_piece=Move::promotion_piece(move);
-        undo_data.is_castle=Move::is_castle(move);
-        undo_data.is_en_passant=Move::is_en_passant(move);
-        undo_data.is_double_push=Move::is_double_push(move);
-        
-        packed_undo_move.value=PackedMove::pack(undo_data);
+        packed_undo_move.value=Move::pack(
+            Move::from(move),Move::to(move),Move::piece(move),
+            (uint32_t)Move::captured_piece(move),(uint32_t)Move::promotion_piece(move),
+            Move::is_castle(move),Move::is_en_passant(move),Move::is_double_push(move));
         packed_undo_move.value|=((uint32_t)castling_rights<<24);
         packed_undo_move.value|=((uint32_t)side_to_move<<31);
         
@@ -524,7 +505,6 @@ public:
         enemy_color=(side_to_move==WHITE)?BLACK:WHITE;
         
         update_occupancy();
-        moves.clear();
     }
 
     void unmake_move(){
@@ -607,74 +587,3 @@ public:
         }
     }
 };
-
-#include "move_generator.cpp"
-#include "move_finder.cpp"
-
-inline bool Board::is_in_check(){
-    uint64_t checkers=0;
-    MoveGenerator mg;
-    
-    Piece bishop=side_to_move==WHITE?Piece::b:Piece::B;
-    Piece rook=side_to_move==WHITE?Piece::r:Piece::R;
-    Piece queen=side_to_move==WHITE?Piece::q:Piece::Q;
-    
-    mg.pawnatk(*this,checkers);
-    mg.knightatk(*this,checkers);
-    mg.sliding_atks(*this,bishop,4,8,checkers);
-    mg.sliding_atks(*this,rook,0,4,checkers);
-    mg.sliding_atks(*this,queen,0,8,checkers);
-    
-    return checkers!=0;
-}
-
-inline bool Board::is_insufficient_material() const{
-    if(bitboards[Piece::P]||bitboards[Piece::p]||
-       bitboards[Piece::R]||bitboards[Piece::r]||
-       bitboards[Piece::Q]||bitboards[Piece::q]){
-        return false;
-    }
-    
-    int white_knights=__builtin_popcountll(bitboards[Piece::N]);
-    int black_knights=__builtin_popcountll(bitboards[Piece::n]);
-    int white_bishops=__builtin_popcountll(bitboards[Piece::B]);
-    int black_bishops=__builtin_popcountll(bitboards[Piece::b]);
-    int total_pieces=2+white_knights+black_knights+white_bishops+black_bishops;
-    
-    if(total_pieces==2)return true;
-    if(total_pieces==3){
-        if(white_bishops==1||black_bishops==1||white_knights==1||black_knights==1){
-            return true;
-        }
-    }
-    
-    if(total_pieces==4){
-        if(white_bishops==1&&black_bishops==1){
-            int white_bishop_sq=lsb_index(bitboards[Piece::B]);
-            int black_bishop_sq=lsb_index(bitboards[Piece::b]);
-            bool white_light=((white_bishop_sq/8)+(white_bishop_sq%8))%2!=0;
-            bool black_light=((black_bishop_sq/8)+(black_bishop_sq%8))%2!=0;
-            
-            if(white_light==black_light)return true;
-        }
-    }
-    
-    return false;
-}
-
-inline GameResult Board::get_game_result(){
-    if(halfmove_clock>=150)return GAME_SEVENTY_FIVE_MOVE_DRAW;
-    if(halfmove_clock>=100)return GAME_FIFTY_MOVE_DRAW;
-    if(is_insufficient_material())return GAME_INSUFFICIENT_MATERIAL;
-    
-    MoveList moves;
-    MoveGenerator mg;
-    mg.generate_moves(*this,moves);
-    
-    if(moves.size()==0){
-        if(is_in_check())return GAME_CHECKMATE;
-        else return GAME_STALEMATE;
-    }
-    
-    return GAME_ONGOING;
-}
