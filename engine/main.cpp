@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
         MoveGenerator mg;
         mg.generate_moves(board, moves);
 
-        Move matched_move;
+        uint32_t matched_move = 0;
         bool found = false;
         for (int i = 0; i < moves.size(); ++i) {
             if (move_to_uci(moves.move_list[i]) == uci_move) {
@@ -104,8 +104,8 @@ int main(int argc, char* argv[]) {
         if (get_game_result(board) == GAME_ONGOING) {
             int depth = (argc >= 5) ? atoi(argv[4]) : 6;
             Engine engine;
-            Move best = engine.best_move(board, depth);
-            if (best.value != 0) {
+            uint32_t best = engine.best_move(board, depth);
+            if (best != 0) {
                 bot_move_uci = move_to_uci(best);
                 board.make_move(best);
             }
@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
         board.set_fen(fen);
 
         Engine engine;
-        Move best = engine.best_move(board, depth);
+        uint32_t best = engine.best_move(board, depth);
 
         cout << "{" << endl;
         cout << "  \"best_move\": \"" << move_to_uci(best) << "\"" << endl;
@@ -234,7 +234,7 @@ int main(int argc, char* argv[]) {
             MoveList moves;
             mg.generate_moves(board, moves);
 
-            Move matched_move;
+            uint32_t matched_move = 0;
             bool found = false;
             for (int i = 0; i < moves.size(); ++i) {
                 if (move_to_uci(moves.move_list[i]) == user_input) {
@@ -258,8 +258,8 @@ int main(int argc, char* argv[]) {
 
             cout << "\nTigerFish is thinking (depth " << depth << ")..." << endl;
             Engine engine;
-            Move best = engine.best_move(board, depth);
-            if (best.value != 0) {
+            uint32_t best = engine.best_move(board, depth);
+            if (best != 0) {
                 cout << "TigerFish plays: " << move_to_uci(best) << endl;
                 board.make_move(best);
                 cout << endl;
@@ -339,7 +339,7 @@ int main(int argc, char* argv[]) {
                 MoveList moves;
                 mg.generate_moves(board, moves);
                 
-                Move matched_move;
+                uint32_t matched_move = 0;
                 bool found = false;
                 for (int i = 0; i < moves.size(); ++i) {
                     if (move_to_uci(moves.move_list[i]) == uci_move) {
@@ -360,8 +360,8 @@ int main(int argc, char* argv[]) {
                 string bot_move_uci = "";
                 if (depth > 0 && get_game_result(board) == GAME_ONGOING) {
                     Engine engine;
-                    Move best = engine.best_move(board, depth);
-                    if (best.value != 0) {
+                    uint32_t best = engine.best_move(board, depth);
+                    if (best != 0) {
                         bot_move_uci = move_to_uci(best);
                         board.make_move(best);
                     }

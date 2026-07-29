@@ -93,15 +93,13 @@ public:
         }
     }
 
-    Move best_move(Board& board,int depth){
+    uint32_t best_move(Board& board,int depth){
         MoveList moves;
         MoveGenerator mg;
         mg.generate_moves(board,moves);
 
         if (moves.size() == 0) {
-            Move empty;
-            empty.value = 0;
-            return empty;
+            return 0;
         }
 
         bool maximizing=(board.side_to_move==WHITE);
@@ -122,7 +120,7 @@ public:
 
         // Only choose randomly from moves that are within 50 centipawns (0.5 pawn value) of the best move.
         // This ensures the computer plays tactically strong moves while maintaining game variety.
-        vector<Move> candidates;
+        vector<uint32_t> candidates;
         const int THRESHOLD = 50;
 
         for (int i=0; i<moves.size(); i++) {
@@ -140,7 +138,7 @@ public:
             seeded = true;
         }
         
-        int random_idx = rand() % limit;
-        return candidates[random_idx];
+        int pick = rand() % limit;
+        return candidates[pick];
     }
 };

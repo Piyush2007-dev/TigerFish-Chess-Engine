@@ -96,86 +96,89 @@ inline void print_bitboard(uint64_t bb){
 
 #include "magic_lut.cpp"
 
-class Move{
-public:
-    uint32_t value;
-    
-    static int from(Move m){
-        return (int)(m.value&0x3Fu);
-    }
-    static int to(Move m){
-        return (int)((m.value>>6)&0x3Fu);
-    }
-    static Piece piece(Move m){
-        return (Piece)((m.value>>12)&0xFu);
-    }
-    static Piece captured_piece(Move m){
-        return (Piece)((m.value>>16)&0xFu);
-    }
-    static Piece promotion_piece(Move m){
-        return (Piece)((m.value>>20)&0xFu);
-    }
-    
-    static bool is_capture(Move m){
-        return ((m.value>>16)&0xFu)!=0xFu;
-    }
-    static bool is_promotion(Move m){
-        return ((m.value>>20)&0xFu)!=0xFu;
-    }
-    static uint8_t castling_rights(Move m){
-        return (uint8_t)((m.value>>24)&0xFu);
-    }
-    static bool is_castle(Move m){
-        return ((m.value>>28)&0x1u)!=0;
-    }
-    static bool is_en_passant(Move m){
-        return ((m.value>>29)&0x1u)!=0;
-    }
-    static bool is_double_push(Move m){
-        return ((m.value>>30)&0x1u)!=0;
-    }
-    static Color side(Move m){
-        return (Color)((m.value>>31)&0x1u);
-    }
-    static uint32_t pack(int from_square,int to_square,Piece piece,
+inline int move_from(uint32_t m){
+    return (int)(m&0x3Fu);
+}
+
+inline int move_to(uint32_t m){
+    return (int)((m>>6)&0x3Fu);
+}
+
+inline Piece move_piece(uint32_t m){
+    return (Piece)((m>>12)&0xFu);
+}
+
+inline Piece move_captured_piece(uint32_t m){
+    return (Piece)((m>>16)&0xFu);
+}
+
+inline Piece move_promotion_piece(uint32_t m){
+    return (Piece)((m>>20)&0xFu);
+}
+
+inline bool move_is_capture(uint32_t m){
+    return ((m>>16)&0xFu)!=0xFu;
+}
+
+inline bool move_is_promotion(uint32_t m){
+    return ((m>>20)&0xFu)!=0xFu;
+}
+
+inline uint8_t move_castling_rights(uint32_t m){
+    return (uint8_t)((m>>24)&0xFu);
+}
+
+inline bool move_is_castle(uint32_t m){
+    return ((m>>28)&0x1u)!=0;
+}
+
+inline bool move_is_en_passant(uint32_t m){
+    return ((m>>29)&0x1u)!=0;
+}
+
+inline bool move_is_double_push(uint32_t m){
+    return ((m>>30)&0x1u)!=0;
+}
+
+inline Color move_side(uint32_t m){
+    return (Color)((m>>31)&0x1u);
+}
+
+inline uint32_t pack_move(int from_square,int to_square,Piece piece,
                          uint32_t captured_piece=0xFu,uint32_t promotion_piece=0xFu,
                          bool is_castle=false,bool is_en_passant=false,bool is_double_push=false){
-        uint32_t m=0;
-        m=((uint32_t)from_square&0x3Fu);
-        m|=(((uint32_t)to_square&0x3Fu)<<6);
-        m|=(((uint32_t)piece&0xFu)<<12);
-        m|=((captured_piece&0xFu)<<16);
-        m|=((promotion_piece&0xFu)<<20);
-        if(is_castle)m|=1u<<28;
-        if(is_en_passant)m|=1u<<29;
-        if(is_double_push)m|=1u<<30;
-        return m;
-    }
-    static string to_uci(Move m){
-        int f=from(m);
-        int t=to(m);
-        
-        string uci="";
-        uci+=(char)('a'+(f%8));
-        uci+=(char)('1'+(f/8));
-        uci+=(char)('a'+(t%8));
-        uci+=(char)('1'+(t/8));
-        
-        if(is_promotion(m)){
-            Piece promo=promotion_piece(m);
-            
-            if(promo==Piece::N||promo==Piece::n)uci+='n';
-            else if(promo==Piece::B||promo==Piece::b)uci+='b';
-            else if(promo==Piece::R||promo==Piece::r)uci+='r';
-            else if(promo==Piece::Q||promo==Piece::q)uci+='q';
-        }
-        
-        return uci;
-    }
-};
+    uint32_t m=0;
+    m=((uint32_t)from_square&0x3Fu);
+    m|=(((uint32_t)to_square&0x3Fu)<<6);
+    m|=(((uint32_t)piece&0xFu)<<12);
+    m|=((captured_piece&0xFu)<<16);
+    m|=((promotion_piece&0xFu)<<20);
+    if(is_castle)m|=1u<<28;
+    if(is_en_passant)m|=1u<<29;
+    if(is_double_push)m|=1u<<30;
+    return m;
+}
 
-inline string move_to_uci(Move m){
-    return Move::to_uci(m);
+inline string move_to_uci(uint32_t m){
+    int f=move_from(m);
+    int t=move_to(m);
+    
+    string uci="";
+    uci+=(char)('a'+(f%8));
+    uci+=(char)('1'+(f/8));
+    uci+=(char)('a'+(t%8));
+    uci+=(char)('1'+(t/8));
+    
+    if(move_is_promotion(m)){
+        Piece promo=move_promotion_piece(m);
+        
+        if(promo==Piece::N||promo==Piece::n)uci+='n';
+        else if(promo==Piece::B||promo==Piece::b)uci+='b';
+        else if(promo==Piece::R||promo==Piece::r)uci+='r';
+        else if(promo==Piece::Q||promo==Piece::q)uci+='q';
+    }
+    
+    return uci;
 }
 
 class Board{
@@ -193,7 +196,7 @@ public:
     int fullmove_number=1;
     string START_FEN="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     
-    vector<Move> move_history;
+    vector<uint32_t> move_history;
     vector<uint8_t> ep_history;
     vector<uint8_t> halfmove_history;
 
@@ -396,25 +399,24 @@ public:
         if(all_occ!=board.occupancy[2])cout<<"ALL OCC MISMATCH\n";
     }
 
-    void make_move(Move move){
+    void make_move(uint32_t move){
         Color enemy=(side_to_move==WHITE)?BLACK:WHITE;
         
-        Move packed_undo_move;
-        packed_undo_move.value=Move::pack(
-            Move::from(move),Move::to(move),Move::piece(move),
-            (uint32_t)Move::captured_piece(move),(uint32_t)Move::promotion_piece(move),
-            Move::is_castle(move),Move::is_en_passant(move),Move::is_double_push(move));
-        packed_undo_move.value|=((uint32_t)castling_rights<<24);
-        packed_undo_move.value|=((uint32_t)side_to_move<<31);
+        uint32_t packed_undo_move=pack_move(
+            move_from(move),move_to(move),move_piece(move),
+            (uint32_t)move_captured_piece(move),(uint32_t)move_promotion_piece(move),
+            move_is_castle(move),move_is_en_passant(move),move_is_double_push(move));
+        packed_undo_move|=((uint32_t)castling_rights<<24);
+        packed_undo_move|=((uint32_t)side_to_move<<31);
         
         move_history.push_back(packed_undo_move);
         ep_history.push_back(en_passant);
         halfmove_history.push_back(halfmove_clock);
         
-        Piece piece=Move::piece(move);
-        int from_square=Move::from(move);
-        int to_square=Move::to(move);
-        bool is_capture=Move::is_capture(move);
+        Piece piece=move_piece(move);
+        int from_square=move_from(move);
+        int to_square=move_to(move);
+        bool is_capture=move_is_capture(move);
         
         uint64_t from_mask=1ULL<<from_square;
         uint64_t to_mask=1ULL<<to_square;
@@ -427,15 +429,15 @@ public:
         piece_on[from_square]=(Piece)0xF;
         piece_on[to_square]=piece;
         
-        if(Move::is_promotion(move)){
-            Piece promo=Move::promotion_piece(move);
+        if(move_is_promotion(move)){
+            Piece promo=move_promotion_piece(move);
             bitboards[piece]^=to_mask;
             bitboards[promo]^=to_mask;
             piece_on[to_square]=promo;
         }
         
         if(is_capture){
-            if(Move::is_en_passant(move)){
+            if(move_is_en_passant(move)){
                 int cap_sq=(side_to_move==WHITE)?to_square-8:to_square+8;
                 Piece cap_pawn=(side_to_move==WHITE)?Piece::p:Piece::P;
                 uint64_t cap_mask=1ULL<<cap_sq;
@@ -445,14 +447,14 @@ public:
                 occupancy[enemy]^=cap_mask;
                 occupancy[2]^=cap_mask;
             }else{
-                Piece captured=Move::captured_piece(move);
+                Piece captured=move_captured_piece(move);
                 bitboards[captured]^=to_mask;
                 occupancy[enemy]^=to_mask;
                 occupancy[2]^=to_mask;
             }
         }
         
-        if(Move::is_castle(move)){
+        if(move_is_castle(move)){
             uint64_t rook_from,rook_to;
             Piece rook_piece;
             
@@ -494,7 +496,7 @@ public:
             if(to_square==56)castling_rights&=~BLACK_QUEEN_SIDE;
         }
         
-        if(Move::is_double_push(move)){
+        if(move_is_double_push(move)){
             en_passant=(piece==Piece::P)?to_square-8:to_square+8;
         }else{
             en_passant=255;
@@ -508,19 +510,19 @@ public:
     }
 
     void unmake_move(){
-        Move move=move_history.back();
+        uint32_t move=move_history.back();
         move_history.pop_back();
         
-        castling_rights=Move::castling_rights(move);
+        castling_rights=move_castling_rights(move);
         en_passant=ep_history.back();
         ep_history.pop_back();
         halfmove_clock=halfmove_history.back();
         halfmove_history.pop_back();
         
-        Piece piece=Move::piece(move);
-        int from_square=Move::from(move);
-        int to_square=Move::to(move);
-        bool is_capture=Move::is_capture(move);
+        Piece piece=move_piece(move);
+        int from_square=move_from(move);
+        int to_square=move_to(move);
+        bool is_capture=move_is_capture(move);
         
         uint64_t from_mask=1ULL<<from_square;
         uint64_t to_mask=1ULL<<to_square;
@@ -532,15 +534,15 @@ public:
         piece_on[from_square]=piece;
         piece_on[to_square]=(Piece)0xF;
         
-        if(Move::is_promotion(move)){
-            Piece promo=Move::promotion_piece(move);
+        if(move_is_promotion(move)){
+            Piece promo=move_promotion_piece(move);
             bitboards[promo]^=to_mask;
             bitboards[piece]^=from_mask;
         }else{
             bitboards[piece]^=from_mask|to_mask;
         }
         
-        if(Move::is_castle(move)){
+        if(move_is_castle(move)){
             uint64_t rook_from,rook_to;
             Piece rook_piece;
             
@@ -567,9 +569,9 @@ public:
         occupancy[2]^=from_mask|to_mask;
         
         if(is_capture){
-            if(Move::is_en_passant(move)){
-                int cap_sq=(Move::side(move)==WHITE)?to_square-8:to_square+8;
-                Piece cap_pawn=(Move::side(move)==WHITE)?Piece::p:Piece::P;
+            if(move_is_en_passant(move)){
+                int cap_sq=(move_side(move)==WHITE)?to_square-8:to_square+8;
+                Piece cap_pawn=(move_side(move)==WHITE)?Piece::p:Piece::P;
                 uint64_t cap_mask=1ULL<<cap_sq;
                 
                 piece_on[cap_sq]=cap_pawn;
@@ -577,7 +579,7 @@ public:
                 occupancy[enemy_color]|=cap_mask;
                 occupancy[2]|=cap_mask;
             }else{
-                Piece captured=Move::captured_piece(move);
+                Piece captured=move_captured_piece(move);
                 
                 piece_on[to_square]=captured;
                 bitboards[captured]|=to_mask;
