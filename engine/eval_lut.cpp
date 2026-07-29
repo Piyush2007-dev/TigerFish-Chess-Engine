@@ -1,5 +1,3 @@
-#pragma once
-
 inline constexpr int PIECE_VALUE[12] = {
     100,320,330,500,900,20000,
     100,320,330,500,900,20000

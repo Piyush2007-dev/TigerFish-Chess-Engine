@@ -1,4 +1,3 @@
-#pragma once
 #include "rules.cpp"
 #include "eval_lut.cpp"
 
