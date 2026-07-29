@@ -47,11 +47,8 @@ perft/
 tools/
 graphify-out/
 
-# Local session logs & knowledge files
-PROJECT_KNOWLEDGE.md
-session_log_*.md
-issues.txt
-tigerfish_uml_diagram_*.png
+# Ignored old files directory
+old_files/
 
 # Explicitly track game.exe binary in the repository root
 !game.exe
