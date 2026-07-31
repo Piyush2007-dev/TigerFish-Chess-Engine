@@ -57,7 +57,6 @@ enum GameResult{
     GAME_INSUFFICIENT_MATERIAL
 };
 
-
 inline uint64_t NOT_A_FILE=0xFEFEFEFEFEFEFEFEULL;
 inline uint64_t NOT_H_FILE=0x7F7F7F7F7F7F7F7FULL;
 inline uint64_t NOT_AB_FILE=0xFCFCFCFCFCFCFCFCULL;
@@ -238,9 +237,13 @@ public:
                 if(c=='/'){
                     rank--;
                     file=0;
-                }else if(isdigit(c)){
-                    file+=c-'0';
-                }else{
+                }
+
+                else if(isdigit(c)){
+                    file+=c-'0'; //c-'0' will give ascii of char - ascii of 0 to know to skip thtat much sq
+                }
+
+                else{
                     int sq=rank*8+file;
                     Piece p;
                     
@@ -264,6 +267,7 @@ public:
                         bitboards[p]|=1ULL<<sq;
                         piece_on[sq]=p;
                     }
+
                     file++;
                 }
             }
@@ -290,7 +294,8 @@ public:
                 int f=ep[0]-'a';
                 int r=ep[1]-'1';
                 en_passant=r*8+f;
-            }else{
+            }
+            else{
                 en_passant=255;
             }
         }
@@ -354,7 +359,7 @@ public:
     void update_occupancy(){
         occupancy[Color::WHITE]=0;
         for(int i=0;i<6;++i)occupancy[Color::WHITE]|=bitboards[i];
-        
+
         occupancy[Color::BLACK]=0;
         for(int i=6;i<12;++i)occupancy[Color::BLACK]|=bitboards[i];
         
@@ -385,6 +390,7 @@ public:
         cout<<"  a b c d e f g h\n";
     }
 
+//old internal  function 
     void verify_board(Board& board){
         uint64_t white_occ=0,black_occ=0;
         
@@ -405,6 +411,7 @@ public:
             move_from(move),move_to(move),move_piece(move),
             (uint32_t)move_captured_piece(move),(uint32_t)move_promotion_piece(move),
             move_is_castle(move),move_is_en_passant(move),move_is_double_push(move));
+            
         packed_undo_move|=((uint32_t)castling_rights<<24);
         packed_undo_move|=((uint32_t)side_to_move<<31);
         

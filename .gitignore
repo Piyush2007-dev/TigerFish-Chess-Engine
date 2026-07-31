@@ -41,11 +41,8 @@ Thumbs.db
 
 # Stockfish binary
 stockfish-windows-x86-64-avx2.exe
-# Organised local-only folders (not tracked)
-archive/
-perft/
-tools/
 graphify-out/
+.graphifyignore
 
 # Ignored old files directory
 old_files/
