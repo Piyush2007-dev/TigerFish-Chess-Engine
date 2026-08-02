@@ -2,9 +2,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const url = require('url');
 
-const PORT = 8080;
+const PORT = 5000;
 const ENGINE_EXE = path.join(__dirname, 'game.exe');
 
 // Spawn the C++ chess engine in interactive mode persistently
@@ -86,7 +85,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    const parsedUrl = url.parse(req.url, true);
+    const parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
     const pathname = parsedUrl.pathname;
 
     // Route: Static files
@@ -106,7 +105,7 @@ const server = http.createServer(async (req, res) => {
 
     // Route: GET /api/state?fen=...
     if (req.method === 'GET' && pathname === '/api/state') {
-        const fen = parsedUrl.query.fen;
+        const fen = parsedUrl.searchParams.get('fen');
         if (!fen) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Missing FEN query parameter' }));

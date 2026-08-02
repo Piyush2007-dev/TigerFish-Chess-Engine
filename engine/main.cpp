@@ -8,12 +8,54 @@
 //   g++ -O2 -std=c++20 -o game.exe engine/main.cpp
 // ══════════════════════════════════════════════════════════════
 #include "search.cpp"   
+
+inline string result_to_status_str(GameResult result) {
+    switch (result) {
+        case GAME_CHECKMATE:              return "checkmate";
+        case GAME_STALEMATE:              return "stalemate";
+        case GAME_FIFTY_MOVE_DRAW:        return "fifty_move";
+        case GAME_SEVENTY_FIVE_MOVE_DRAW: return "seventy_five_move";
+        case GAME_INSUFFICIENT_MATERIAL:  return "insufficient_material";
+        default:                          return "ongoing";
+    }
+}
+
+inline void print_board_state_json(Board& board, const MoveList& moves, const string& bot_move_uci = "") {
+    string grid = "";
+    char piece_chars[12] = {'P','N','B','R','Q','K','p','n','b','r','q','k'};
+    for (int i = 0; i < 64; ++i) {
+        Piece p = board.piece_on[i];
+        grid += (p == (Piece)0xF) ? '.' : piece_chars[p];
+    }
+
+    GameResult result = get_game_result(board);
+    string status_str = result_to_status_str(result);
+
+    cout << "{" << endl;
+    cout << "  \"fen\": \""    << board.to_fen() << "\"," << endl;
+    cout << "  \"side\": \""   << (board.side_to_move == WHITE ? "white" : "black") << "\"," << endl;
+    cout << "  \"status\": \"" << status_str << "\"," << endl;
+    cout << "  \"in_check\": " << (is_in_check(board) ? "true" : "false") << "," << endl;
+    cout << "  \"grid\": \""   << grid << "\"," << endl;
+    if (!bot_move_uci.empty()) {
+        cout << "  \"bot_move\": \"" << bot_move_uci << "\"," << endl;
+    }
+    cout << "  \"moves\": ["   << endl;
+    for (int i = 0; i < moves.size(); ++i) {
+        cout << "    \"" << move_to_uci(moves.move_list[i]) << "\"";
+        if (i < moves.size() - 1) cout << ",";
+        cout << endl;
+    }
+    cout << "  ]" << endl;
+    cout << "}" << endl;
+}
+
 int main(int argc, char* argv[]) {
     init_rays();
     init_magics();
 
     if (argc < 2) {
-        cerr << "Usage: " << argv[0] << " [moves|make|best] [args...]" << endl;
+        cerr << "Usage: " << argv[0] << " [moves|make|best|play|interactive] [args...]" << endl;
         return 1;
     }
 
@@ -33,43 +75,14 @@ int main(int argc, char* argv[]) {
         MoveGenerator mg;
         mg.generate_moves(board, moves);
 
-        // 64-char grid string (a1=index 0, h8=index 63)
-        string grid = "";
-        char piece_chars[12] = {'P','N','B','R','Q','K','p','n','b','r','q','k'};
-        for (int i = 0; i < 64; ++i) {
-            Piece p = board.piece_on[i];
-            grid += (p == (Piece)0xF) ? '.' : piece_chars[p];
-        }
-
-        GameResult result = get_game_result(board);
-        string status_str = "ongoing";
-        if      (result == GAME_CHECKMATE)              status_str = "checkmate";
-        else if (result == GAME_STALEMATE)              status_str = "stalemate";
-        else if (result == GAME_FIFTY_MOVE_DRAW)        status_str = "fifty_move";
-        else if (result == GAME_SEVENTY_FIVE_MOVE_DRAW) status_str = "seventy_five_move";
-        else if (result == GAME_INSUFFICIENT_MATERIAL)  status_str = "insufficient_material";
-
-        cout << "{" << endl;
-        cout << "  \"fen\": \""    << board.to_fen() << "\"," << endl;
-        cout << "  \"side\": \""   << (board.side_to_move == WHITE ? "white" : "black") << "\"," << endl;
-        cout << "  \"status\": \"" << status_str << "\"," << endl;
-        cout << "  \"in_check\": " << (is_in_check(board) ? "true" : "false") << "," << endl;
-        cout << "  \"grid\": \""   << grid << "\"," << endl;
-        cout << "  \"moves\": ["   << endl;
-        for (int i = 0; i < moves.size(); ++i) {
-            cout << "    \"" << move_to_uci(moves.move_list[i]) << "\"";
-            if (i < moves.size() - 1) cout << ",";
-            cout << endl;
-        }
-        cout << "  ]" << endl;
-        cout << "}" << endl;
+        print_board_state_json(board, moves);
         return 0;
     }
 
     // ── make: apply a UCI move and return the new FEN ────────
     else if (command == "make") {
         if (argc < 4) {
-            cerr << "Usage: " << argv[0] << " make \"<fen>\" \"<uci>\"" << endl;
+            cerr << "Usage: " << argv[0] << " make \"<fen>\" \"<uci>\" [depth]" << endl;
             return 1;
         }
         string fen      = argv[2];
@@ -111,42 +124,10 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Return full state JSON (same as "moves") so server gets updated grid too
+        // Return full state JSON
         MoveList new_moves;
         mg.generate_moves(board, new_moves);
-
-        string grid = "";
-        char piece_chars[12] = {'P','N','B','R','Q','K','p','n','b','r','q','k'};
-        for (int i = 0; i < 64; ++i) {
-            Piece p = board.piece_on[i];
-            grid += (p == (Piece)0xF) ? '.' : piece_chars[p];
-        }
-
-        GameResult result = get_game_result(board);
-        string status_str = "ongoing";
-        if      (result == GAME_CHECKMATE)              status_str = "checkmate";
-        else if (result == GAME_STALEMATE)              status_str = "stalemate";
-        else if (result == GAME_FIFTY_MOVE_DRAW)        status_str = "fifty_move";
-        else if (result == GAME_SEVENTY_FIVE_MOVE_DRAW) status_str = "seventy_five_move";
-        else if (result == GAME_INSUFFICIENT_MATERIAL)  status_str = "insufficient_material";
-
-        cout << "{" << endl;
-        cout << "  \"fen\": \""    << board.to_fen() << "\"," << endl;
-        cout << "  \"side\": \""   << (board.side_to_move == WHITE ? "white" : "black") << "\"," << endl;
-        cout << "  \"status\": \"" << status_str << "\"," << endl;
-        cout << "  \"in_check\": " << (is_in_check(board) ? "true" : "false") << "," << endl;
-        cout << "  \"grid\": \""   << grid << "\"," << endl;
-        if (!bot_move_uci.empty()) {
-            cout << "  \"bot_move\": \"" << bot_move_uci << "\"," << endl;
-        }
-        cout << "  \"moves\": ["   << endl;
-        for (int i = 0; i < new_moves.size(); ++i) {
-            cout << "    \"" << move_to_uci(new_moves.move_list[i]) << "\"";
-            if (i < new_moves.size() - 1) cout << ",";
-            cout << endl;
-        }
-        cout << "  ]" << endl;
-        cout << "}" << endl;
+        print_board_state_json(board, new_moves, bot_move_uci);
         return 0;
     }
 
@@ -293,35 +274,7 @@ int main(int argc, char* argv[]) {
                 MoveList moves;
                 mg.generate_moves(board, moves);
                 
-                string grid = "";
-                char piece_chars[12] = {'P','N','B','R','Q','K','p','n','b','r','q','k'};
-                for (int i = 0; i < 64; ++i) {
-                    Piece p = board.piece_on[i];
-                    grid += (p == (Piece)0xF) ? '.' : piece_chars[p];
-                }
-                
-                GameResult result = get_game_result(board);
-                string status_str = "ongoing";
-                if      (result == GAME_CHECKMATE)              status_str = "checkmate";
-                else if (result == GAME_STALEMATE)              status_str = "stalemate";
-                else if (result == GAME_FIFTY_MOVE_DRAW)        status_str = "fifty_move";
-                else if (result == GAME_SEVENTY_FIVE_MOVE_DRAW) status_str = "seventy_five_move";
-                else if (result == GAME_INSUFFICIENT_MATERIAL)  status_str = "insufficient_material";
-
-                cout << "{" << endl;
-                cout << "  \"fen\": \""    << board.to_fen() << "\"," << endl;
-                cout << "  \"side\": \""   << (board.side_to_move == WHITE ? "white" : "black") << "\"," << endl;
-                cout << "  \"status\": \"" << status_str << "\"," << endl;
-                cout << "  \"in_check\": " << (is_in_check(board) ? "true" : "false") << "," << endl;
-                cout << "  \"grid\": \""   << grid << "\"," << endl;
-                cout << "  \"moves\": ["   << endl;
-                for (int i = 0; i < moves.size(); ++i) {
-                    cout << "    \"" << move_to_uci(moves.move_list[i]) << "\"";
-                    if (i < moves.size() - 1) cout << ",";
-                    cout << endl;
-                }
-                cout << "  ]" << endl;
-                cout << "}" << endl;
+                print_board_state_json(board, moves);
                 cout << "===READY===" << endl;
             }
             else if (cmd == "make") {
@@ -370,38 +323,7 @@ int main(int argc, char* argv[]) {
                 MoveList new_moves;
                 mg.generate_moves(board, new_moves);
                 
-                string grid = "";
-                char piece_chars[12] = {'P','N','B','R','Q','K','p','n','b','r','q','k'};
-                for (int i = 0; i < 64; ++i) {
-                    Piece p = board.piece_on[i];
-                    grid += (p == (Piece)0xF) ? '.' : piece_chars[p];
-                }
-                
-                GameResult result = get_game_result(board);
-                string status_str = "ongoing";
-                if      (result == GAME_CHECKMATE)              status_str = "checkmate";
-                else if (result == GAME_STALEMATE)              status_str = "stalemate";
-                else if (result == GAME_FIFTY_MOVE_DRAW)        status_str = "fifty_move";
-                else if (result == GAME_SEVENTY_FIVE_MOVE_DRAW) status_str = "seventy_five_move";
-                else if (result == GAME_INSUFFICIENT_MATERIAL)  status_str = "insufficient_material";
-
-                cout << "{" << endl;
-                cout << "  \"fen\": \""    << board.to_fen() << "\"," << endl;
-                cout << "  \"side\": \""   << (board.side_to_move == WHITE ? "white" : "black") << "\"," << endl;
-                cout << "  \"status\": \"" << status_str << "\"," << endl;
-                cout << "  \"in_check\": " << (is_in_check(board) ? "true" : "false") << "," << endl;
-                cout << "  \"grid\": \""   << grid << "\"," << endl;
-                if (!bot_move_uci.empty()) {
-                    cout << "  \"bot_move\": \"" << bot_move_uci << "\"," << endl;
-                }
-                cout << "  \"moves\": ["   << endl;
-                for (int i = 0; i < new_moves.size(); ++i) {
-                    cout << "    \"" << move_to_uci(new_moves.move_list[i]) << "\"";
-                    if (i < new_moves.size() - 1) cout << ",";
-                    cout << endl;
-                }
-                cout << "  ]" << endl;
-                cout << "}" << endl;
+                print_board_state_json(board, new_moves, bot_move_uci);
                 cout << "===READY===" << endl;
             }
         }

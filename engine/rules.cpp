@@ -12,7 +12,7 @@ struct MoveList{
         scores[count]=score;
         move_list[count++]=m;
     }
-    int size(){
+    int size() const {
         return count;
     }
 };
@@ -692,17 +692,23 @@ inline bool is_insufficient_material(const Board &board){
         }
     }
     
-    if(total_pieces==4){
-        if(white_bishops==1&&black_bishops==1){
-            int white_bishop_sq=lsb_index(board.bitboards[Piece::B]);
-            int black_bishop_sq=lsb_index(board.bitboards[Piece::b]);
-            bool white_light=((white_bishop_sq/8)+(white_bishop_sq%8))%2!=0;
-            bool black_light=((black_bishop_sq/8)+(black_bishop_sq%8))%2!=0;
-            
-            if(white_light==black_light)return true;
+    // Check bishop square colors across all bishops
+    if (white_knights == 0 && black_knights == 0 && (white_bishops + black_bishops > 0)) {
+        // If all bishops on board are on the SAME square color, checkmate is impossible
+        uint64_t all_bishops = board.bitboards[Piece::B] | board.bitboards[Piece::b];
+        bool has_light = false, has_dark = false;
+        while (all_bishops) {
+            int sq = pop_lsb(all_bishops);
+            bool is_light = ((sq / 8) + (sq % 8)) % 2 != 0;
+            if (is_light) has_light = true;
+            else has_dark = true;
+        }
+        // If all bishops on board share the exact same square color
+        if (!(has_light && has_dark)) {
+            return true;
         }
     }
-    
+
     return false;
 }
 
