@@ -44,6 +44,9 @@ stockfish-windows-x86-64-avx2.exe
 graphify-out/
 .graphifyignore
 
+# Environment & secrets
+.env
+
 # Ignored old files directory
 old_files/
 
