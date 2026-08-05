@@ -9,9 +9,16 @@ import urllib.parse
 LICHESS_API = "https://lichess.org/api"
 
 class TigerFishBridge:
-    def __init__(self, token, engine_path="./game.exe"):
+    def __init__(self, token, engine_path=None):
         self.token = token
         self.headers = {"Authorization": f"Bearer {token}"}
+        if engine_path is None:
+            if os.path.exists("./game"):
+                engine_path = "./game"
+            elif os.path.exists("./game.exe"):
+                engine_path = "./game.exe"
+            else:
+                engine_path = "./game"
         self.engine_path = engine_path
         self.engine_proc = None
 

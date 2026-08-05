@@ -1,0 +1,9 @@
+services:
+  - type: worker
+    name: tigerfish-lichess-bot
+    env: docker
+    dockerfilePath: Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: LICHESS_TOKEN
+        sync: false
