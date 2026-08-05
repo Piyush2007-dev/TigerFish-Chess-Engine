@@ -6,7 +6,30 @@ import sys
 import urllib.request
 import urllib.parse
 
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
 LICHESS_API = "https://lichess.org/api"
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"TigerFish Bot Online")
+
+    def log_message(self, format, *args):
+        pass # Suppress HTTP access logs to keep bot terminal clean
+
+def start_health_server():
+    port = int(os.getenv("PORT", 8080))
+    try:
+        server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        print(f"[HealthCheck] Lightweight HTTP server active on port {port}")
+    except Exception as e:
+        print(f"[HealthCheck Warning] {e}")
 
 class TigerFishBridge:
     def __init__(self, token, engine_path=None):
@@ -201,6 +224,7 @@ if __name__ == "__main__":
         print("Or run: python lichess_bot.py --token \"lip_xxxx\"")
         sys.exit(1)
         
+    start_health_server()
     bridge = TigerFishBridge(token=args.token)
     bridge.start_engine()
     bridge.upgrade_account_to_bot()
