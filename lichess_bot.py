@@ -1,6 +1,3 @@
-# lichess_bot.py — Zero-dependency Lichess Bot Bridge for TigerFish Engine
-# Usage: python lichess_bot.py --token "lip_your_token_here"
-
 import argparse
 import json
 import os

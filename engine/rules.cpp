@@ -15,6 +15,20 @@ struct MoveList{
     int size() const {
         return count;
     }
+    void sort_mvv_lva() {
+        for (int i = 1; i < count; i++) {
+            uint32_t key_move = move_list[i];
+            int key_score = scores[i];
+            int j = i - 1;
+            while (j >= 0 && scores[j] < key_score) {
+                move_list[j + 1] = move_list[j];
+                scores[j + 1] = scores[j];
+                j--;
+            }
+            move_list[j + 1] = key_move;
+            scores[j + 1] = key_score;
+        }
+    }
 };
 
 // rook_attacks — O(1) lookup: masks occ to relevant squares, hashes with magic, returns precomputed attack bitboard
@@ -653,6 +667,22 @@ public:
         }else{
             KingMoves(board,moves,attack_mask);
         }
+
+        static const int MVV_LVA_VAL[12] = {100, 300, 325, 500, 900, 10000, 100, 300, 325, 500, 900, 10000};
+        for (int i = 0; i < moves.count; i++) {
+            uint32_t m = moves.move_list[i];
+            if (move_is_capture(m)) {
+                Piece attacker = move_piece(m);
+                Piece victim = move_captured_piece(m);
+                if (move_is_en_passant(m)) {
+                    victim = (move_side(m) == WHITE) ? Piece::p : Piece::P;
+                }
+                moves.scores[i] = (MVV_LVA_VAL[victim] * 10) - MVV_LVA_VAL[attacker] + 10000;
+            } else {
+                moves.scores[i] = 0;
+            }
+        }
+        moves.sort_mvv_lva();
     }
 };
 

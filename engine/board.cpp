@@ -179,6 +179,40 @@ inline string move_to_uci(uint32_t m){
     return uci;
 }
 
+// Zobrist Hashing Global Tables
+inline uint64_t ZOBRIST_PIECE[12][64];
+inline uint64_t ZOBRIST_SIDE;
+inline uint64_t ZOBRIST_CASTLING[16];
+inline uint64_t ZOBRIST_EP[65];
+inline bool zobrist_initialized = false;
+
+inline uint64_t rng64(uint64_t& state) {
+    // SplitMix64 deterministic PRNG
+    state += 0x9e3779b97f4a7c15ULL;
+    uint64_t z = state;
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+    return z ^ (z >> 31);
+}
+
+inline void init_zobrist() {
+    if (zobrist_initialized) return;
+    uint64_t state = 1070372ULL; // Fixed seed for reproducible keys
+    for (int p = 0; p < 12; p++) {
+        for (int sq = 0; sq < 64; sq++) {
+            ZOBRIST_PIECE[p][sq] = rng64(state);
+        }
+    }
+    ZOBRIST_SIDE = rng64(state);
+    for (int i = 0; i < 16; i++) {
+        ZOBRIST_CASTLING[i] = rng64(state);
+    }
+    for (int i = 0; i < 65; i++) {
+        ZOBRIST_EP[i] = rng64(state);
+    }
+    zobrist_initialized = true;
+}
+
 class Board{
 public:
     array<uint64_t,12> bitboards;
@@ -193,20 +227,40 @@ public:
     int halfmove_clock=0;
     int fullmove_number=1;
     string START_FEN="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    
+
     vector<uint32_t> move_history;
     vector<uint8_t> ep_history;
     vector<uint8_t> halfmove_history;
+    vector<uint64_t> zobrist_history;
+    uint64_t zobrist_hash = 0ULL;
 
     inline uint64_t get_ray(int direction,int square){
         return ray_table[direction][square];
     }
     Board(){
+        init_zobrist();
         move_history.reserve(4096);
         ep_history.reserve(4096);
         halfmove_history.reserve(4096);
+        zobrist_history.reserve(4096);
         
         set_fen(START_FEN);
+    }
+
+    uint64_t compute_zobrist_hash() const {
+        uint64_t h = 0ULL;
+        for (int sq = 0; sq < 64; sq++) {
+            Piece p = piece_on[sq];
+            if (p != (Piece)0xF) {
+                h ^= ZOBRIST_PIECE[p][sq];
+            }
+        }
+        if (side_to_move == BLACK) {
+            h ^= ZOBRIST_SIDE;
+        }
+        h ^= ZOBRIST_CASTLING[castling_rights & 0xFu];
+        h ^= ZOBRIST_EP[en_passant == 255 ? 64 : en_passant];
+        return h;
     }
     
 
@@ -303,7 +357,9 @@ public:
         if(nfields>4)halfmove_clock=stoi(fields[4]);
         if(nfields>5)fullmove_number=stoi(fields[5]);
         
+        zobrist_history.clear();
         update_occupancy();
+        zobrist_hash=compute_zobrist_hash();
     }
 
     string to_fen() {
@@ -418,11 +474,18 @@ public:
         move_history.push_back(packed_undo_move);
         ep_history.push_back(en_passant);
         halfmove_history.push_back(halfmove_clock);
+        zobrist_history.push_back(zobrist_hash);
+        
+        uint8_t old_castling_rights = castling_rights;
+        uint8_t old_en_passant = en_passant;
         
         Piece piece=move_piece(move);
         int from_square=move_from(move);
         int to_square=move_to(move);
         bool is_capture=move_is_capture(move);
+        
+        zobrist_hash ^= ZOBRIST_PIECE[piece][from_square];
+        zobrist_hash ^= ZOBRIST_PIECE[piece][to_square];
         
         uint64_t from_mask=1ULL<<from_square;
         uint64_t to_mask=1ULL<<to_square;
@@ -440,6 +503,9 @@ public:
             bitboards[piece]^=to_mask;
             bitboards[promo]^=to_mask;
             piece_on[to_square]=promo;
+
+            zobrist_hash ^= ZOBRIST_PIECE[piece][to_square];
+            zobrist_hash ^= ZOBRIST_PIECE[promo][to_square];
         }
         
         if(is_capture){
@@ -452,35 +518,47 @@ public:
                 bitboards[cap_pawn]^=cap_mask;
                 occupancy[enemy]^=cap_mask;
                 occupancy[2]^=cap_mask;
+
+                zobrist_hash ^= ZOBRIST_PIECE[cap_pawn][cap_sq];
             }else{
                 Piece captured=move_captured_piece(move);
                 bitboards[captured]^=to_mask;
                 occupancy[enemy]^=to_mask;
                 occupancy[2]^=to_mask;
+
+                zobrist_hash ^= ZOBRIST_PIECE[captured][to_square];
             }
         }
         
         if(move_is_castle(move)){
             uint64_t rook_from,rook_to;
             Piece rook_piece;
+            int r_from_sq, r_to_sq;
             
             if(to_square==6){
-                rook_from=1ULL<<7;rook_to=1ULL<<5;rook_piece=Piece::R;
+                r_from_sq=7; r_to_sq=5; rook_piece=Piece::R;
+                rook_from=1ULL<<7;rook_to=1ULL<<5;
                 piece_on[7]=(Piece)0xF;piece_on[5]=Piece::R;
             }else if(to_square==2){
-                rook_from=1ULL<<0;rook_to=1ULL<<3;rook_piece=Piece::R;
+                r_from_sq=0; r_to_sq=3; rook_piece=Piece::R;
+                rook_from=1ULL<<0;rook_to=1ULL<<3;
                 piece_on[0]=(Piece)0xF;piece_on[3]=Piece::R;
             }else if(to_square==62){
-                rook_from=1ULL<<63;rook_to=1ULL<<61;rook_piece=Piece::r;
+                r_from_sq=63; r_to_sq=61; rook_piece=Piece::r;
+                rook_from=1ULL<<63;rook_to=1ULL<<61;
                 piece_on[63]=(Piece)0xF;piece_on[61]=Piece::r;
             }else{
-                rook_from=1ULL<<56;rook_to=1ULL<<59;rook_piece=Piece::r;
+                r_from_sq=56; r_to_sq=59; rook_piece=Piece::r;
+                rook_from=1ULL<<56;rook_to=1ULL<<59;
                 piece_on[56]=(Piece)0xF;piece_on[59]=Piece::r;
             }
             
             bitboards[rook_piece]^=rook_from|rook_to;
             occupancy[side_to_move]^=rook_from|rook_to;
             occupancy[2]^=rook_from|rook_to;
+
+            zobrist_hash ^= ZOBRIST_PIECE[rook_piece][r_from_sq];
+            zobrist_hash ^= ZOBRIST_PIECE[rook_piece][r_to_sq];
         }
         
         if(piece==Piece::K)castling_rights&=~(WHITE_KING_SIDE|WHITE_QUEEN_SIDE);
@@ -508,6 +586,14 @@ public:
             en_passant=255;
         }
         
+        zobrist_hash ^= ZOBRIST_CASTLING[old_castling_rights & 0xFu];
+        zobrist_hash ^= ZOBRIST_CASTLING[castling_rights & 0xFu];
+
+        zobrist_hash ^= ZOBRIST_EP[old_en_passant == 255 ? 64 : old_en_passant];
+        zobrist_hash ^= ZOBRIST_EP[en_passant == 255 ? 64 : en_passant];
+
+        zobrist_hash ^= ZOBRIST_SIDE;
+        
         if(side_to_move==BLACK)fullmove_number++;
         side_to_move=(side_to_move==WHITE)?BLACK:WHITE;
         enemy_color=(side_to_move==WHITE)?BLACK:WHITE;
@@ -524,6 +610,9 @@ public:
         ep_history.pop_back();
         halfmove_clock=halfmove_history.back();
         halfmove_history.pop_back();
+
+        zobrist_hash=zobrist_history.back();
+        zobrist_history.pop_back();
         
         Piece piece=move_piece(move);
         int from_square=move_from(move);
