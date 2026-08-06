@@ -388,13 +388,19 @@ class LichessBot:
 
     async def send_move(self, game_id: str, move_uci: str):
         url = f"{LICHESS_API}/bot/game/{game_id}/move/{move_uci}"
-        try:
-            async with self.session.post(url) as resp:
-                if resp.status != 200:
+        for attempt in range(1, 4):
+            try:
+                async with self.session.post(url) as resp:
+                    if resp.status == 200:
+                        return True
                     body = await resp.text()
-                    logger.warning(f"[{game_id}] Move submission {move_uci} failed (HTTP {resp.status}): {body[:100]}")
-        except Exception as e:
-            logger.error(f"[{game_id}] Error posting move {move_uci}: {e}")
+                    logger.warning(f"[{game_id}] Move submission {move_uci} attempt {attempt} failed (HTTP {resp.status}): {body[:100]}")
+            except Exception as e:
+                logger.warning(f"[{game_id}] Move submission {move_uci} attempt {attempt} network glitch: {e}")
+            if attempt < 3:
+                await asyncio.sleep(0.5)
+        logger.error(f"[{game_id}] Failed to post move {move_uci} after 3 attempts.")
+        return False
 
 # ── Environment Loading ───────────────────────────────────────────────
 def load_env_file(filepath=".env"):
