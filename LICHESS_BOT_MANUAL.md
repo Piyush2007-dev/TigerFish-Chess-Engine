@@ -42,11 +42,11 @@ Handles **1 game at a time**. Ideal for testing, casual play, or debugging.
 - Dynamically queries `/api/account` on startup to detect the account's username.
 - Auto-accepts all incoming standard variant challenges.
 - Runs a lightweight health check HTTP server on port 10000.
-- Configurable search depth (default 7).
+- Configurable search depth (default 6).
 
 ### Usage Command:
 ```bash
-python lichess_bot.py --depth 7
+python lichess_bot.py --depth 6
 ```
 
 ---

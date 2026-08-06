@@ -420,7 +420,7 @@ def main():
     parser = argparse.ArgumentParser(description="TigerFish Lichess Bot Bridge")
     parser.add_argument("--token", type=str, help="Lichess API Token", default=os.getenv("LICHESS_TOKEN"))
     parser.add_argument("--engine", type=str, help="Path to game.exe", default=DEFAULT_ENGINE_PATH)
-    parser.add_argument("--depth", type=int, help="Engine search depth", default=7)
+    parser.add_argument("--depth", type=int, help="Engine search depth", default=6)
     args = parser.parse_args()
 
     token = args.token
