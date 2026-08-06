@@ -148,19 +148,38 @@ Bit  31    : side_to_move (0 = White, 1 = Black)
 
 **Layer 2 — State container and incremental move application.**
 
+### Low-Level Bit Manipulation Primitives
+- **`lsb_index(uint64_t mask)`**: Uses `std::countr_zero(mask)` (compiles to x86-64 single-cycle `BSF` / `TZCNT` instructions). Returns index of the least significant set bit (0–63).
+- **`msb_index(uint64_t mask)`**: Uses `63 - std::countl_zero(mask)` (`BSR` / `LZCNT` on x86-64). Returns index of the most significant set bit.
+- **`pop_lsb(uint64_t& mask)`**: Extracts `lsb_index(mask)` and clears that bit in-place using Kernighan's trick `mask &= mask - 1`. Used for fast $O(K)$ iteration over set bits:
+  ```cpp
+  while (mask) {
+      int sq = pop_lsb(mask);
+      // Process square sq
+  }
+  ```
+
+### Bitwise File Guard Masks
+To prevent bit shifts from wrapping across opposite board edges (e.g. `a`-file shifting left to `h`-file):
+- `NOT_A_FILE` (`0xFEFEFEFEFEFEFEFEULL`): Clears File A.
+- `NOT_H_FILE` (`0x7F7F7F7F7F7F7F7FULL`): Clears File H.
+- `NOT_AB_FILE` (`0xFCFCFCFCFCFCFCFCULL`): Clears Files A and B (for knight -2 shifts).
+- `NOT_GH_FILE` (`0x3F3F3F3F3F3F3F3FULL`): Clears Files G and H (for knight +2 shifts).
+
 ### `Board` Class Workings
 - `bitboards[12]` (`uint64_t`): 12 piece bitboards (P, N, B, R, Q, K, p, n, b, r, q, k).
-- `occupancy[3]` (`uint64_t`): `[0]` = White occupied, `[1]` = Black occupied, `[2]` = All occupied.
-- `piece_on[64]` (`Piece`): Mailbox array providing O(1) piece lookup for any square.
-- `zobrist_hash` (`uint64_t`): 64-bit Zobrist key representing the exact position (piece placement, side to move, castling rights, en-passant file).
+- `occupancy[3]` (`uint64_t`): `[0]` = White occupied, `[1]` = Black occupied, `[2]` = All occupied (`[0] | [1]`).
+- `piece_on[64]` (`Piece`): Mailbox array providing O(1) piece lookup for any square (sentinel `0xF` = empty).
+- `zobrist_hash` (`uint64_t`): 64-bit Zobrist key representing the exact position.
+- **`SplitMix64` Deterministic PRNG**: Seeding `1070372ULL` initializes `ZOBRIST_PIECE[12][64]`, `ZOBRIST_SIDE`, `ZOBRIST_CASTLING[16]`, and `ZOBRIST_EP[65]` deterministically on startup.
 - `make_move(uint32_t move)`:
   1. Saves current castling rights, en-passant square, halfmove clock, and Zobrist key into history vectors (`move_history`, `ep_history`, `halfmove_history`, `zobrist_history`).
-  2. Updates piece bitboards, mailbox `piece_on`, and Zobrist key incrementally.
+  2. Updates piece bitboards, mailbox `piece_on`, and Zobrist key incrementally ($O(1)$ delta XOR operations).
   3. Handles promotions, captures, en-passant pawn removal, and rook movement for castling.
   4. Swaps `side_to_move` and updates `occupancy[]`.
 - `unmake_move()`:
   1. Pops the last move from `move_history`, `ep_history`, `halfmove_history`, `zobrist_history`.
-  2. Reverses piece placements and restores castling rights, en-passant square, and side to move.
+  2. Reverses piece placements and restores castling rights, en-passant square, and side to move with zero Zobrist key drift.
 
 ---
 
@@ -168,13 +187,17 @@ Bit  31    : side_to_move (0 = White, 1 = Black)
 
 **Layer 3 — Legal move generation, pin detection, check verification.**
 
-### Key Workings
+### Key Workings & Tactical Generator States
 - `MoveList`: Stack-allocated container storing up to 218 moves (`uint32_t move_list[218]`, `int scores[218]`).
-- `find_pins(Board& board)`: Scans rays outward from the friendly king to detect pinned friendly pieces and store their allowable ray movement masks.
+- `find_pins(Board& board)`: Scans rays outward from the friendly king to detect pinned friendly pieces and store their allowable ray movement masks (`PinInfo`).
 - `ep_exposes_king(Board& board, int from_sq, int ep_sq)`: Verifies rare horizontal rank pin exposures when an en-passant capture removes two pawns from the same rank simultaneously.
-- `generate_moves(Board& board, MoveList& moves)`:
-  - Generates strictly legal moves (no illegal check-exposing moves emitted).
-  - Handles single-check (legal moves must block or capture checker) and double-check (king must move).
+- **Legal Move Generation Flow** (`generate_moves`):
+  1. **Double Check ($\ge 2$ checkers)**: Only King moves are legal.
+  2. **Single Check ($1$ checker)**: Non-king moves must either capture the checker or block the check ray (`legal_mask`). King moves must move to non-attacked squares.
+  3. **Normal State ($0$ checkers)**: All legal moves are generated. `PinInfo` masks prevent pinned pieces from leaving their pin ray.
+- **MVV-LVA (Most Valuable Victim - Least Valuable Attacker) Scoring**:
+  $$\text{MVV-LVA Score} = (\text{Victim Value} \times 10) - \text{Attacker Value} + 10000$$
+  Calls `moves.sort_mvv_lva()` ($O(N)$ insertion sort) so all legal capture moves are presented to search in descending order of tactical value before quiet moves.
 - `get_game_result(Board& board)`:
   - Evaluates terminal conditions: `GAME_CHECKMATE`, `GAME_STALEMATE`, `GAME_FIFTY_MOVE_DRAW` (100 halfmoves), `GAME_SEVENTY_FIVE_MOVE_DRAW` (150 halfmoves), `GAME_INSUFFICIENT_MATERIAL`.
 
@@ -197,13 +220,18 @@ Bit  31    : side_to_move (0 = White, 1 = Black)
       TTFlag   flag = TT_EXACT;// 1 byte : Bound flag (TT_EXACT=0, TT_ALPHA=1, TT_BETA=2)
   };
   ```
+- **Bound Classifications**:
+  - `TT_EXACT` (0): Evaluation score was exact (trapped strictly between $\alpha$ and $\beta$).
+  - `TT_ALPHA` (1): Upper bound score ($\text{eval} \le \alpha$). Branch failed low.
+  - `TT_BETA` (2): Lower bound score ($\text{eval} \ge \beta$). Branch failed high (caused beta cutoff).
 - **Replacement Policy**: Depth-preferred replacement (`if (entry.key != key || depth >= entry.depth)`).
 
 ### Search Workings & TT Move Ordering
 1. **TT Lookup**: On entering `minimax()`, `tt.lookup()` checks if the current Zobrist key exists in the table. If stored depth $\ge$ search depth and bound flags match (EXACT, ALPHA upper bound, BETA lower bound), the cached evaluation is returned immediately.
 2. **TT Move Ordering**: If a `tt_move` exists for the position, `minimax()` swaps it to position 0 in `MoveList` so the best move is searched first, maximizing alpha-beta pruning cutoffs.
 3. **Alpha-Beta Pruning**: Alpha and Beta bounds prune branches as soon as a refutation is found.
-4. **Root Candidate Selection (`best_move`)**: Evaluates root moves at search depth, filters moves within a 50-centipawn threshold of the maximum score, and randomly selects among the top candidates for opening variety.
+4. **Mate & Draw Evaluations**: Checkmate evaluation scores $\pm (20000 + \text{depth})$ prioritizing faster mates. Draws evaluate to 0 centipawns.
+5. **Root Candidate Selection (`best_move`)**: Evaluates root moves at search depth, filters moves within a 50-centipawn threshold of the maximum score, and randomly selects among the top candidates for opening variety.
 
 ---
 
