@@ -12,5 +12,7 @@ __pycache__/
 old_files/
 # Editor & OS files
 .vscode/
+.agents/
+SOP.md
 .DS_Store
 Thumbs.db
