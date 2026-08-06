@@ -620,7 +620,7 @@ public:
         attack_mask|=sliding_atks(board,queen,0,8,checkers);
         attack_mask|=kingatk(board);
         
-        int check_count=__builtin_popcountll(checkers);
+        int check_count=std::popcount(checkers);
         
         if(check_count==0){
             uint64_t legal_mask=~0ULL;
@@ -709,10 +709,10 @@ inline bool is_insufficient_material(const Board &board){
         return false;
     }
     
-    int white_knights=__builtin_popcountll(board.bitboards[Piece::N]);
-    int black_knights=__builtin_popcountll(board.bitboards[Piece::n]);
-    int white_bishops=__builtin_popcountll(board.bitboards[Piece::B]);
-    int black_bishops=__builtin_popcountll(board.bitboards[Piece::b]);
+    int white_knights=std::popcount(board.bitboards[Piece::N]);
+    int black_knights=std::popcount(board.bitboards[Piece::n]);
+    int white_bishops=std::popcount(board.bitboards[Piece::B]);
+    int black_bishops=std::popcount(board.bitboards[Piece::b]);
     int total_pieces=2+white_knights+black_knights+white_bishops+black_bishops;
     
     if(total_pieces==2)return true;

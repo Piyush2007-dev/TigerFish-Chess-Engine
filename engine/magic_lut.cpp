@@ -141,7 +141,7 @@ inline void init_magics(){
         for(int i=f+1;i<7;i++)rmask|=(1ULL<<(r*8+i)); // east
         for(int i=f-1;i>0;i--)rmask|=(1ULL<<(r*8+i)); // west
         ROOK_MASK[sq]=rmask;
-        ROOK_SHIFT[sq]=64-__builtin_popcountll(rmask); // shift so (occ*MAGIC)>>SHIFT fits in [0, 2^popcount-1]
+        ROOK_SHIFT[sq]=64-std::popcount(rmask); // shift so (occ*MAGIC)>>SHIFT fits in [0, 2^popcount-1]
 
         uint64_t bmask=0; // blocker mask for bishop on sq — diagonal squares, edges excluded
         for(int i=r+1,j=f+1;i<7&&j<7;i++,j++)bmask|=(1ULL<<(i*8+j)); // NE
@@ -149,7 +149,7 @@ inline void init_magics(){
         for(int i=r-1,j=f+1;i>0&&j<7;i--,j++)bmask|=(1ULL<<(i*8+j)); // SE
         for(int i=r-1,j=f-1;i>0&&j>0;i--,j--)bmask|=(1ULL<<(i*8+j)); // SW
         BISHOP_MASK[sq]=bmask;
-        BISHOP_SHIFT[sq]=64-__builtin_popcountll(bmask);
+        BISHOP_SHIFT[sq]=64-std::popcount(bmask);
 
         uint64_t rsub=0; // current rook blocker subset being processed
         do{

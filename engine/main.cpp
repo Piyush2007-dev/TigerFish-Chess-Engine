@@ -79,6 +79,49 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    // ── apply: apply a UCI move and return new FEN (no search) ──
+    else if (command == "apply") {
+        if (argc < 4) {
+            cerr << "Usage: " << argv[0] << " apply \"<fen>\" \"<uci>\"" << endl;
+            return 1;
+        }
+        string fen      = argv[2];
+        string uci_move = argv[3];
+
+        Board board;
+        board.set_fen(fen);
+
+        MoveList moves;
+        MoveGenerator mg;
+        mg.generate_moves(board, moves);
+
+        uint32_t matched_move = 0;
+        bool found = false;
+        for (int i = 0; i < moves.size(); ++i) {
+            if (move_to_uci(moves.move_list[i]) == uci_move) {
+                matched_move = moves.move_list[i];
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            cerr << "Illegal move: " << uci_move << endl;
+            return 1;
+        }
+
+        board.make_move(matched_move);
+
+        GameResult result = get_game_result(board);
+        string status_str = result_to_status_str(result);
+
+        cout << "{" << endl;
+        cout << "  \"fen\": \""    << board.to_fen() << "\"," << endl;
+        cout << "  \"status\": \"" << status_str     << "\"" << endl;
+        cout << "}" << endl;
+        return 0;
+    }
+
     // ── make: apply a UCI move and return the new FEN ────────
     else if (command == "make") {
         if (argc < 4) {
@@ -252,78 +295,114 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // ── interactive: persistent stdin/stdout loop for server ─────
+    // ── interactive: persistent engine session (one process per game) ──
+    //
+    // Protocol (one command per line, responses end with ===READY===):
+    //   newgame [fen]       — init board (TT is NOT cleared; it keeps accumulating)
+    //   apply <uci_move>    — advance the internal board by one move
+    //   best <depth>        — search from current position; also advances board
+    //   quit / exit         — terminate
+    //
     else if (command == "interactive") {
-        string line;
+        // One Engine lives for the whole session → TT persists across all moves
+        Engine engine;
+        Board  board;
         MoveGenerator mg;
+        bool initialized = false;
+
+        string line;
         while (getline(cin, line)) {
             if (line.empty()) continue;
+
             stringstream ss(line);
             string cmd;
             ss >> cmd;
-            if (cmd == "exit" || cmd == "quit") {
+
+            // ── quit ────────────────────────────────────────────────
+            if (cmd == "quit" || cmd == "exit") {
                 break;
             }
-            else if (cmd == "moves") {
+
+            // ── newgame [fen] ────────────────────────────────────────
+            else if (cmd == "newgame") {
                 string fen;
                 getline(ss, fen);
                 if (!fen.empty() && fen[0] == ' ') fen = fen.substr(1);
-                
-                Board board;
+                if (fen.empty()) fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
                 board.set_fen(fen);
-                MoveList moves;
-                mg.generate_moves(board, moves);
-                
-                print_board_state_json(board, moves);
+                // TT intentionally NOT cleared — accumulated knowledge helps
+                initialized = true;
+                cout << "{\"status\": \"ready\"}" << endl;
                 cout << "===READY===" << endl;
             }
-            else if (cmd == "make") {
+
+            // ── apply <uci_move> ─────────────────────────────────────
+            else if (cmd == "apply") {
                 string uci_move;
-                int depth;
-                ss >> uci_move >> depth;
-                
-                string fen;
-                getline(ss, fen);
-                if (!fen.empty() && fen[0] == ' ') fen = fen.substr(1);
-                
-                Board board;
-                board.set_fen(fen);
-                
+                ss >> uci_move;
+
+                if (!initialized) {
+                    cout << "{\"error\": \"No active game. Send 'newgame' first.\"}" << endl;
+                    cout << "===READY===" << endl;
+                    continue;
+                }
+
                 MoveList moves;
                 mg.generate_moves(board, moves);
-                
-                uint32_t matched_move = 0;
+
                 bool found = false;
                 for (int i = 0; i < moves.size(); ++i) {
                     if (move_to_uci(moves.move_list[i]) == uci_move) {
-                        matched_move = moves.move_list[i];
+                        board.make_move(moves.move_list[i]);
                         found = true;
                         break;
                     }
                 }
-                
+
                 if (!found) {
                     cout << "{\"error\": \"Illegal move: " << uci_move << "\"}" << endl;
+                } else {
+                    GameResult result = get_game_result(board);
+                    cout << "{\"fen\": \"" << board.to_fen()
+                         << "\", \"status\": \"" << result_to_status_str(result) << "\"}" << endl;
+                }
+                cout << "===READY===" << endl;
+            }
+
+            // ── best <depth> ─────────────────────────────────────────
+            else if (cmd == "best") {
+                int depth = 7;
+                ss >> depth;
+
+                if (!initialized) {
+                    cout << "{\"error\": \"No active game. Send 'newgame' first.\"}" << endl;
                     cout << "===READY===" << endl;
                     continue;
                 }
-                
-                board.make_move(matched_move);
-                
-                string bot_move_uci = "";
-                if (depth > 0 && get_game_result(board) == GAME_ONGOING) {
-                    Engine engine;
-                    uint32_t best = engine.best_move(board, depth);
-                    if (best != 0) {
-                        bot_move_uci = move_to_uci(best);
-                        board.make_move(best);
-                    }
+
+                if (get_game_result(board) != GAME_ONGOING) {
+                    cout << "{\"best_move\": \"\", \"status\": \"game_over\"}" << endl;
+                    cout << "===READY===" << endl;
+                    continue;
                 }
-                
-                MoveList new_moves;
-                mg.generate_moves(board, new_moves);
-                
-                print_board_state_json(board, new_moves, bot_move_uci);
+
+                uint32_t best = engine.best_move(board, depth);
+                string best_uci = "";
+                if (best != 0) {
+                    best_uci = move_to_uci(best);
+                    board.make_move(best);   // advance persistent board with our move
+                }
+
+                GameResult result = get_game_result(board);
+                cout << "{\"best_move\": \"" << best_uci
+                     << "\", \"fen\": \"" << board.to_fen()
+                     << "\", \"status\": \"" << result_to_status_str(result) << "\"}" << endl;
+                cout << "===READY===" << endl;
+            }
+
+            // ── unknown ──────────────────────────────────────────────
+            else {
+                cout << "{\"error\": \"Unknown command: " << cmd << "\"}" << endl;
                 cout << "===READY===" << endl;
             }
         }
