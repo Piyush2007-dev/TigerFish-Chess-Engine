@@ -1,5 +1,8 @@
 # 🐅 TigerFish Chess Engine
 
+[![Play on Lichess](https://img.shields.io/badge/Play_on-Lichess-swords?style=for-the-badge&logo=lichess&color=2e7d32)](https://lichess.org/@/TigerFish-BOT)  
+🎮 **Play Live on Lichess**: [https://lichess.org/@/TigerFish-BOT](https://lichess.org/@/TigerFish-BOT)
+
 A high-performance, lightweight chess engine written in **C++20**.
 
 TigerFish leverages 64-bit bitboard representations, magic move generation, **Zobrist hashing with zero-drift history**, a **32 MB Transposition Table**, and **MVV-LVA move ordering** to deliver sub-millisecond calculation speeds and sharp tactical play.
