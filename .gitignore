@@ -1,7 +1,4 @@
-# Benchmark folder (not tracked)
-benchmark/
-
-# Compiled binaries
+# Compiled C++ binaries & objects
 *.exe
 *.o
 *.obj
@@ -12,43 +9,28 @@ benchmark/
 *.so
 *.dylib
 
+# Explicitly track game.exe binary in the repository root
+!game.exe
 
-# uv lock / cache
-.uv/
-uv.lock
-
-# Editor / IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-
-# Build artifacts
-*.d
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Logs and temp files
-*.log
-*.tmp
-*.bak
-*.orig
-
-# Stockfish binary
-stockfish-windows-x86-64-avx2.exe
-graphify-out/
-.graphifyignore
+# Python cache & local multi-bot script (not committed)
+__pycache__/
+lichess_multibot.py
 
 # Environment & secrets
 .env
 
-# Ignored old files directory
+# Ignored old files & benchmarks
 old_files/
+benchmark/
 
-# Explicitly track game.exe binary in the repository root
-!game.exe
+# Editor & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs & temp files
+*.log
+*.tmp
+*.bak
+*.orig
