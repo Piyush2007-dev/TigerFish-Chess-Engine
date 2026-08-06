@@ -487,7 +487,8 @@ def main():
     parser.add_argument("--token", type=str, help="Lichess API Token", default=os.getenv("LICHESS_TOKEN"))
     parser.add_argument("--engine", type=str, help="Path to game.exe", default=DEFAULT_ENGINE_PATH)
     parser.add_argument("--depth", type=int, help="Engine search depth", default=6)
-    parser.add_argument("--remote-url", type=str, help="Remote Render URL to pause/resume during local runs", default=os.getenv("RENDER_URL"))
+    default_remote = os.getenv("RENDER_URL", "https://tigerfish-chess-engine.onrender.com" if os.name == "nt" else None)
+    parser.add_argument("--remote-url", type=str, help="Remote Render URL to pause/resume during local runs", default=default_remote)
     args = parser.parse_args()
 
     token = args.token
@@ -497,11 +498,11 @@ def main():
         sys.exit(1)
 
     if args.remote_url:
-        logger.info(f"[Local Override] Sending standby signal to remote Render server: {args.remote_url}")
+        logger.info(f"[Local Override] Active remote URL: {args.remote_url}")
         try:
             asyncio.run(notify_remote(args.remote_url, "standby"))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[Local Override] Standby signal error: {e}")
 
     bot = LichessBot(token=token, engine_path=args.engine, search_depth=args.depth)
 
