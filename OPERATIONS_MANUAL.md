@@ -16,7 +16,8 @@
 7. [File: rules.cpp & MVV-LVA Move Ordering](#7-file-rulescpp--mvv-lva-move-ordering)
 8. [File: search.cpp & Transposition Table](#8-file-searchcpp--transposition-table)
 9. [File: main.cpp & CLI Commands](#9-file-maincpp--cli-commands)
-10. [Performance Milestones & Optimisation Guide](#10-performance-milestones--optimisation-guide)
+10. [File: lichess_bot.py & lichess_multibot.py — Lichess Bot Bridge Architecture](#10-file-lichess_botpy--lichess_multibotpy--lichess-bot-bridge-architecture)
+11. [Performance Milestones & Optimisation Guide](#11-performance-milestones--optimisation-guide)
 
 ---
 
@@ -271,3 +272,5 @@ struct TTEntry {
 1. **Quiescence Search (Q-Search)**: Continue searching all captures at `depth == 0` to eliminate the Horizon Effect.
 2. **Iterative Deepening**: Iteratively search depth 1, 2, 3... to target depth, maximizing TT hit rates.
 3. **Killer Move Heuristic**: Store 2 non-capture moves that caused beta cutoffs per ply.
+
+
