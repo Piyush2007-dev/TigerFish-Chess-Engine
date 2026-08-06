@@ -25,7 +25,7 @@ struct TTEntry {
 
 class TranspositionTable {
 public:
-    static const size_t TABLE_SIZE = 1048576; // 1,048,576 entries = 16 MB
+    static const size_t TABLE_SIZE = 2097152; // 2,097,152 entries = 32 MB
     vector<TTEntry> table;
 
     TranspositionTable() : table(TABLE_SIZE) {}
@@ -114,6 +114,7 @@ public:
     }
 
     int minimax(Board& board,int depth,int alpha,int beta,bool maximizing){
+
         if(depth==0)return evaluate(board);
 
         int alpha_orig = alpha;
@@ -131,12 +132,11 @@ public:
 
         if(moves.size()==0){
             if(is_in_check(board)){
-                return maximizing?(-20000-depth):(20000+depth);
+                return maximizing?(-20000-depth):(20000+depth);//this needs to be fixed later 
             }
             return 0;
         }
-
-        // TT Move Ordering Boost
+        // TT Move Ordering 
         if(tt_move != 0){
             for(int i = 0; i < moves.size(); i++){
                 if(moves.move_list[i] == tt_move){
