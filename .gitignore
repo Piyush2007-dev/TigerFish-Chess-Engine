@@ -3,34 +3,16 @@
 *.o
 *.obj
 *.out
-*.a
-*.lib
-*.dll
-*.so
-*.dylib
 
-# Explicitly track game.exe binary in the repository root
-!game.exe
-
-# Python cache & local multi-bot script (not committed)
-__pycache__/
+# Local multi-game rating farmer (not committed to git)
 lichess_multibot.py
-
+__pycache__/
 # Environment & secrets
 .env
-
-# Ignored old files & benchmarks
 old_files/
-benchmark/
-
 # Editor & OS files
 .vscode/
-.idea/
+.agents/
+SOP.md
 .DS_Store
 Thumbs.db
-
-# Logs & temp files
-*.log
-*.tmp
-*.bak
-*.orig
