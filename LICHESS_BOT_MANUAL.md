@@ -101,7 +101,27 @@ async def send_move(self, game_id: str, move_uci: str):
 
 ---
 
-## 6. How to Test & Challenge Bots (Browser & CLI)
+## 6. Local Override & Render Standby Handshake
+
+To prevent dual-instance connection conflicts, duplicate move submissions, and `HTTP 429 Rate Limiting` when launching `lichess_bot.py` locally while a Render deployment is active:
+
+1. **`HealthCheckHandler` Endpoints**:
+   - `GET /status`: Returns JSON status (`{"status": "ACTIVE" | "STANDBY"}`).
+   - `POST /standby`: Pauses event stream handling on remote instance.
+   - `POST /resume`: Resumes active event stream handling on remote instance.
+
+2. **Automatic Local Override**:
+   - Run locally with `--remote-url`:
+     ```bash
+     python lichess_bot.py --remote-url https://tigerfish-bot.onrender.com
+     ```
+   - On startup, the local process sends a `POST /standby` handshake to Render.
+   - Render pauses its stream processor (`BOT_MODE = "STANDBY"`).
+   - On local shutdown (Ctrl+C), local automatically sends `POST /resume` to reactivate Render!
+
+---
+
+## 7. How to Test & Challenge Bots (Browser & CLI)
 
 ### Method A: Challenge a Bot from the Lichess Website (Browser)
 1. Run `python lichess_bot.py` in your terminal.

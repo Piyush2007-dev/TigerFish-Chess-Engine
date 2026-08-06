@@ -37,13 +37,47 @@ logging.basicConfig(
 )
 logger = logging.getLogger("TigerFish-Bot")
 
+BOT_MODE = "ACTIVE"
+LAST_STANDBY_TIME = 0.0
+
 # ── Lightweight Health Check HTTP Server ──────────────────────────────
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path == "/status":
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            resp = json.dumps({"status": BOT_MODE, "standby_since": LAST_STANDBY_TIME})
+            self.wfile.write(resp.encode("utf-8"))
+            return
+
         self.send_response(200)
         self.send_header("Content-type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"TigerFish Bot Online")
+        self.wfile.write(f"TigerFish Bot Online [{BOT_MODE}]".encode("utf-8"))
+
+    def do_POST(self):
+        global BOT_MODE, LAST_STANDBY_TIME
+        if self.path == "/standby":
+            BOT_MODE = "STANDBY"
+            LAST_STANDBY_TIME = time.time()
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status": "STANDBY", "message": "Render instance paused for local override"}')
+            logger.info("[Remote Handshake] Render instance entered STANDBY mode via local override signal.")
+            return
+        elif self.path == "/resume":
+            BOT_MODE = "ACTIVE"
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status": "ACTIVE", "message": "Render instance resumed active bot stream"}')
+            logger.info("[Remote Handshake] Render instance resumed ACTIVE mode.")
+            return
+
+        self.send_response(404)
+        self.end_headers()
 
     def log_message(self, format, *args):
         pass  # Suppress HTTP access logs
@@ -205,6 +239,15 @@ class LichessBot:
                 backoff = min(backoff * 2, 60)
 
     async def handle_event(self, event: dict):
+        global BOT_MODE, LAST_STANDBY_TIME
+        if BOT_MODE == "STANDBY":
+            # Auto-resume fallback if standby has exceeded 30 minutes (1800s)
+            if LAST_STANDBY_TIME > 0 and (time.time() - LAST_STANDBY_TIME) > 1800:
+                logger.info("[Standby Timeout] Standby exceeded 30m without local heartbeat — auto-resuming ACTIVE mode.")
+                BOT_MODE = "ACTIVE"
+            else:
+                return
+
         event_type = event.get("type")
 
         if event_type == "challenge":
@@ -414,6 +457,20 @@ def load_env_file(filepath=".env"):
                     val = val.strip().strip('"').strip("'")
                     os.environ[key] = val
 
+async def notify_remote(remote_url: str, endpoint: str):
+    if not remote_url:
+        return
+    url = f"{remote_url.rstrip('/')}/{endpoint.lstrip('/')}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, timeout=3.0) as resp:
+                if resp.status == 200:
+                    logger.info(f"[Remote Handshake] Sent {endpoint} to remote instance ({url})")
+                else:
+                    logger.warning(f"[Remote Handshake] {endpoint} to {url} returned HTTP {resp.status}")
+    except Exception as e:
+        logger.warning(f"[Remote Handshake] Could not send {endpoint} to {url}: {e}")
+
 # ── Main Entry Point ──────────────────────────────────────────────────
 def main():
     load_env_file()
@@ -421,6 +478,7 @@ def main():
     parser.add_argument("--token", type=str, help="Lichess API Token", default=os.getenv("LICHESS_TOKEN"))
     parser.add_argument("--engine", type=str, help="Path to game.exe", default=DEFAULT_ENGINE_PATH)
     parser.add_argument("--depth", type=int, help="Engine search depth", default=6)
+    parser.add_argument("--remote-url", type=str, help="Remote Render URL to pause/resume during local runs", default=os.getenv("RENDER_URL"))
     args = parser.parse_args()
 
     token = args.token
@@ -429,12 +487,26 @@ def main():
         logger.error("Please add your token to the .env file as LICHESS_TOKEN=lip_xxxxxxxxx")
         sys.exit(1)
 
+    if args.remote_url:
+        logger.info(f"[Local Override] Sending standby signal to remote Render server: {args.remote_url}")
+        try:
+            asyncio.run(notify_remote(args.remote_url, "standby"))
+        except Exception:
+            pass
+
     bot = LichessBot(token=token, engine_path=args.engine, search_depth=args.depth)
 
     try:
         asyncio.run(bot.start())
     except KeyboardInterrupt:
         logger.info("TigerFish Bot shutdown requested by user.")
+    finally:
+        if args.remote_url:
+            logger.info(f"[Local Override] Resuming remote Render server: {args.remote_url}")
+            try:
+                asyncio.run(notify_remote(args.remote_url, "resume"))
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     main()
