@@ -78,6 +78,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             return
         elif self.path == "/resume":
             BOT_MODE = "ACTIVE"
+            LAST_STANDBY_TIME = 0.0
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
@@ -176,6 +177,7 @@ class LichessBot:
         self.search_depth = search_depth
         self.bot_username = ""
         self.session: aiohttp.ClientSession = None
+        self.active_games: set = set()  # Tracks active game IDs to prevent duplicate tasks
 
         if not os.path.exists(self.engine_path):
             raise FileNotFoundError(f"Engine executable not found at: {self.engine_path}")
@@ -185,7 +187,6 @@ class LichessBot:
         connector = aiohttp.TCPConnector(limit=10)
         async with aiohttp.ClientSession(headers=self.headers, connector=connector) as session:
             self.session = session
-            await self.upgrade_account()
             await self.fetch_bot_username()
 
             logger.info("=" * 65)
@@ -278,9 +279,20 @@ class LichessBot:
         elif event_type == "gameStart":
             game = event.get("game", {})
             game_id = game.get("id")
-            if game_id:
+            if game_id and game_id not in self.active_games:
+                self.active_games.add(game_id)
                 logger.info(f"[Game Started] https://lichess.org/{game_id}")
-                asyncio.create_task(self.play_game(game_id))
+                asyncio.create_task(self.play_game_wrapper(game_id))
+            elif game_id in self.active_games:
+                logger.debug(f"[Duplicate Skipped] Game {game_id} already active.")
+
+    async def play_game_wrapper(self, game_id: str):
+        """Wraps play_game to clean up active_games set on completion."""
+        try:
+            await self.play_game(game_id)
+        finally:
+            self.active_games.discard(game_id)
+            logger.info(f"[{game_id}] Game task cleaned up.")
 
     async def accept_challenge(self, challenge_id: str):
         url = f"{LICHESS_API}/challenge/{challenge_id}/accept"
@@ -480,6 +492,31 @@ async def notify_remote(remote_url: str, endpoint: str):
     except Exception as e:
         logger.warning(f"[Remote Handshake] Could not send {endpoint} to {url}: {e}")
 
+async def check_and_standby_remote(remote_url: str) -> bool:
+    """Check if remote Render instance is ACTIVE before sending standby. Returns True if standby was sent."""
+    if not remote_url:
+        return False
+    status_url = f"{remote_url.rstrip('/')}/status"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(status_url, timeout=3.0) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    remote_status = data.get("status", "UNKNOWN")
+                    if remote_status == "ACTIVE":
+                        logger.info(f"[Local Override] Remote is ACTIVE — sending standby signal.")
+                        await notify_remote(remote_url, "standby")
+                        return True
+                    else:
+                        logger.info(f"[Local Override] Remote already in {remote_status} mode — skipping standby.")
+                        return False
+                else:
+                    logger.warning(f"[Local Override] Could not check remote status (HTTP {resp.status}) — skipping standby.")
+                    return False
+    except Exception as e:
+        logger.warning(f"[Local Override] Remote status check failed: {e} — Render may be offline or sleeping.")
+        return False
+
 # ── Main Entry Point ──────────────────────────────────────────────────
 def main():
     load_env_file()
@@ -497,12 +534,13 @@ def main():
         logger.error("Please add your token to the .env file as LICHESS_TOKEN=lip_xxxxxxxxx")
         sys.exit(1)
 
+    standby_sent = False
     if args.remote_url:
-        logger.info(f"[Local Override] Active remote URL: {args.remote_url}")
+        logger.info(f"[Local Override] Checking remote Render status at: {args.remote_url}")
         try:
-            asyncio.run(notify_remote(args.remote_url, "standby"))
+            standby_sent = asyncio.run(check_and_standby_remote(args.remote_url))
         except Exception as e:
-            logger.warning(f"[Local Override] Standby signal error: {e}")
+            logger.warning(f"[Local Override] Remote check error: {e}")
 
     bot = LichessBot(token=token, engine_path=args.engine, search_depth=args.depth)
 
@@ -511,7 +549,7 @@ def main():
     except KeyboardInterrupt:
         logger.info("TigerFish Bot shutdown requested by user.")
     finally:
-        if args.remote_url:
+        if args.remote_url and standby_sent:
             logger.info(f"[Local Override] Resuming remote Render server: {args.remote_url}")
             try:
                 asyncio.run(notify_remote(args.remote_url, "resume"))
