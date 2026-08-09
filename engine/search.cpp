@@ -115,6 +115,7 @@ public:
 
     int minimax(Board& board,int depth,int alpha,int beta,bool maximizing){
 
+        if(board.is_repetition(3) || board.halfmove_clock >= 100) return 0;
         if(depth==0)return evaluate(board);
 
         int alpha_orig = alpha;

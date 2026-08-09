@@ -16,6 +16,7 @@ inline string result_to_status_str(GameResult result) {
         case GAME_FIFTY_MOVE_DRAW:        return "fifty_move";
         case GAME_SEVENTY_FIVE_MOVE_DRAW: return "seventy_five_move";
         case GAME_INSUFFICIENT_MATERIAL:  return "insufficient_material";
+        case GAME_THREEFOLD_REPETITION:   return "threefold_repetition";
         default:                          return "ongoing";
     }
 }

@@ -746,6 +746,7 @@ inline GameResult get_game_result(Board &board){
     if(board.halfmove_clock>=150)return GAME_SEVENTY_FIVE_MOVE_DRAW;
     if(board.halfmove_clock>=100)return GAME_FIFTY_MOVE_DRAW;
     if(is_insufficient_material(board))return GAME_INSUFFICIENT_MATERIAL;
+    if(board.is_repetition(3))return GAME_THREEFOLD_REPETITION;
     
     MoveList moves;
     MoveGenerator mg;
