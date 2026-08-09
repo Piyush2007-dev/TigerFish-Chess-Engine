@@ -54,7 +54,8 @@ enum GameResult{
     GAME_STALEMATE,
     GAME_FIFTY_MOVE_DRAW,
     GAME_SEVENTY_FIVE_MOVE_DRAW,
-    GAME_INSUFFICIENT_MATERIAL
+    GAME_INSUFFICIENT_MATERIAL,
+    GAME_THREEFOLD_REPETITION
 };
 
 inline uint64_t NOT_A_FILE=0xFEFEFEFEFEFEFEFEULL;
@@ -682,5 +683,19 @@ public:
                 occupancy[2]|=to_mask;
             }
         }
+    }
+
+    inline bool is_repetition(int count = 3) const {
+        int occurrences = 1;
+        int limit = std::min((int)zobrist_history.size(), halfmove_clock);
+        int start_idx = (int)zobrist_history.size() - 2; 
+
+        for (int i = start_idx; i >= (int)zobrist_history.size() - limit; i -= 2) {
+            if (i >= 0 && zobrist_history[i] == zobrist_hash) {
+                occurrences++;
+                if (occurrences >= count) return true;
+            }
+        }
+        return false;
     }
 };
