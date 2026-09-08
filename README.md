@@ -3,131 +3,160 @@
 [![Play on Lichess](https://img.shields.io/badge/Play_on-Lichess-swords?style=for-the-badge&logo=lichess&color=2e7d32)](https://lichess.org/@/TigerFish-BOT)  
 🎮 **Play Live on Lichess**: [https://lichess.org/@/TigerFish-BOT](https://lichess.org/@/TigerFish-BOT)
 
-A high-performance, lightweight chess engine written in **C++20**.
-
-TigerFish leverages 64-bit bitboard representations, magic move generation, **Zobrist hashing with zero-drift history**, a **32 MB Transposition Table**, and **MVV-LVA move ordering** to deliver sub-millisecond calculation speeds and sharp tactical play.
+A high-performance chess engine written in **C++20** featuring tapered evaluation, enhanced search with modern pruning, and a 32 MB transposition table.
 
 ---
 
-## ⚡ Performance Benchmarks & Milestones
+## ⚡ Performance Benchmarks
 
-TigerFish features a micro-optimized bitboard move generator and an alpha-beta search pipeline evaluated across massive position datasets:
-
-| Feature Stage | Depth 6 Search Time | Nodes Searched | Total Speedup |
-| :--- | :--- | :--- | :--- |
-| **Baseline (Plain Minimax)** | $46,600\text{ ms}$ ($46.6\text{s}$) | $173,000,000\text{ nodes}$ | $1\times$ |
-| **Zobrist Transposition Table** | $350\text{ ms}$ | $1,203,335\text{ nodes}$ | $133\times$ FASTER |
-| **TT + MVV-LVA Move Ordering** | **$67\text{ ms}$** | **$542,396\text{ nodes}$** | **$695\times$ FASTER** |
-
-* **Move Generator Throughput**: ~25–35 Million positions / second across 24 CPU threads on parallel Perft benchmarks.
-* **Cold-Search Speed**: Sub-100ms response time at Depth 6–7.
+| Metric | Enhanced Engine | Old Engine | Improvement |
+|--------|----------------|------------|-------------|
+| **Depth 6 avg nodes/move** | 2,559,351 | 92,126,415 | **36× fewer** |
+| **Depth 6 avg time/move** | 2,867ms | 49,058ms | **17× faster** |
+| **Match score (88 positions)** | **88.5** | 87.5 | Enhanced wins |
+| **Move Generator Throughput** | ~20–35 Mnps | — | — |
 
 ---
 
 ## ✨ Key Technical Highlights
 
-* **64-Bit Bitboard Core**: All piece positions, occupancies, and attack rays are represented as 64-bit unsigned integers (`uint64_t`) evaluated via single-cycle hardware bit instructions.
-* **32-Bit Compact Move Bitfield**: Moves are stored as 32-bit unsigned integers (`uint32_t`) with zero heap allocation overhead during search recursion.
-* **Magic Bitboard Sliding Attacks**: Pre-calculated magic multipliers hash Rook, Bishop, and Queen slider attack rays instantly.
-* **Zobrist Transposition Table (32 MB)**: $O(1)$ memory lookup table storing $2,097,152$ evaluation bounds (`TT_EXACT`, `TT_ALPHA`, `TT_BETA`), depth levels, and historical best moves.
-* **MVV-LVA Move Ordering**: Most Valuable Victim - Least Valuable Attacker insertion sorting prioritizes high-tactical-value captures, boosting alpha-beta cutoff efficiency by $695\times$.
-
-> 📖 *For exact C++ struct definitions, bitwise math formulas, and file-by-file code breakdowns, see the **[OPERATIONS_MANUAL.md](OPERATIONS_MANUAL.md)**.*
+* **Tapered Evaluation**: MG/EG phase-weighted PST lookups — king stays safe in middlegame, centralizes in endgame.
+* **Enhanced Search**: Null-move pruning, LMR, killer moves, history heuristic, quiescence search.
+* **32 MB Transposition Table**: $O(1)$ lookup with 2M entries, exact/bound flags, 32-bit evaluation scores.
+* **Pawn Structure**: Doubled pawn penalties, isolated pawn detection, passed pawn bonuses scaled by rank.
+* **Piece Mobility**: Safe-square counting weighted by phase — strong positional signal.
+* **King Safety**: Pawn shield presence, attacker count × weight, quadratic falloff for multiple attackers.
+* **MVV-LVA + History Move Ordering**: Captures sorted by tactical value, quiet moves boosted by history.
 
 ---
 
-## 🚀 Building & Execution Guide
+## 🚀 Build & Run
 
-### 1. Compile the C++ Engine
-Compile `engine/main.cpp` with high optimization flags:
+### Compile
 ```bash
-g++ -O3 -std=c++20 engine/main.cpp -o game.exe
+g++ -O3 -std=c++20 -Wl,--stack,67108864 -o game.exe engine/main.cpp
 ```
 
-### 2. Execution Commands
+### Commands
 
-- **Persistent Session Mode (IPC Pipe / Bot Driver)**:
-  ```bash
-  ./game.exe interactive
-  ```
-  *Commands over stdin: `newgame [fen]`, `apply <uci>`, `best <depth>`, `quit`.*
+**UCI Protocol** (default):
+```bash
+./game.exe
+```
 
-- **Single-shot Best Move Calculation**:
-  ```bash
-  ./game.exe best "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" 7
-  ```
+**Analyze a position** (returns JSON):
+```bash
+./game.exe analyze "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" 8
+```
 
-- **Perft Move Generation Verification**:
-  ```bash
-  ./game.exe perft "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" 5
-  ```
+**Persistent bot session**:
+```bash
+./game.exe interactive
+# stdin: newgame, apply <move>, best <depth>, quit
+```
 
-- **Terminal Human vs Engine Game**:
-  ```bash
-  ./game.exe play 7
-  ```
+**Best move**:
+```bash
+./game.exe best "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" 7
+```
+
+**Legal moves**:
+```bash
+./game.exe moves "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+```
+
+**Make a move**:
+```bash
+./game.exe make "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" e2e4
+```
 
 ---
 
-## 🏗️ 5-Layer Pyramid Architecture
+## 🏗️ Architecture
 
 ```
- ┌────────────────────────────────────────────────────────┐
- │                    LAYER 5: ENGINE                     │
- │  File: search.cpp, main.cpp                            │
- │  Classes: Engine, TranspositionTable, CLI Commands     │
- │  Functions: evaluate(), minimax(), best_move()         │
- └───────────────────────────┬────────────────────────────┘
-                             │ depends down on
-                             ▼
- ┌────────────────────────────────────────────────────────┐
- │            LAYER 4: MOVE GENERATION & RULES            │
- │  File: rules.cpp                                       │
- │  Classes & Structs: MoveGenerator, MoveList, PinInfo   │
- │  Functions: generate_moves(), sort_mvv_lva(),          │
- │             get_game_result(), is_in_check()           │
- └───────────────────────────┬────────────────────────────┘
-                             │ depends down on
-                             ▼
- ┌────────────────────────────────────────────────────────┐
- │                 LAYER 3: BOARD STATE                   │
- │  File: board.cpp                                       │
- │  Class: Board                                          │
- │  Functions: make_move(), unmake_move(), set_fen(),    │
- │             init_zobrist(), zobrist_hash               │
- └───────────────────────────┬────────────────────────────┘
-                             │ depends down on
-                             ▼
- ┌────────────────────────────────────────────────────────┐
- │            LAYER 2: 32-BIT MOVE PACKING                │
- │  File: board.cpp                                       │
- │  Functions: pack_move(), move_from(), move_to(),       │
- │             move_to_uci()                              │
- └───────────────────────────┬────────────────────────────┘
-                             │ depends down on
-                             ▼
- ┌────────────────────────────────────────────────────────┐
- │          LAYER 1: ENUMS, MASKS & LOOKUP TABLES         │
- │  Files: board.cpp, magic_lut.cpp, eval_lut.cpp         │
- │  Enums: Piece, Color, Direction, CastleRights,         │
- │         GameResult                                     │
- │  Tables: ray_table, PST arrays, Magic Bitboards        │
- └───────────────────────────┴────────────────────────────┘
+Layer 5: CLI & Interactive Protocol
+         engine/main.cpp
+               |
+Layer 4: Enhanced Search — null-move, LMR, killers, history, quiescence
+         engine/search.cpp
+               |
+Layer 3: Legal Move Generator — pins, check detection, MVV-LVA
+         engine/rules.cpp
+               |
+Layer 2: Board State — bitboards, Zobrist hash, make/unmake
+         engine/board.cpp
+               |
+Layer 1: Magic Bitboards + Evaluation Tables
+         engine/magic_lut.cpp   engine/eval.cpp
 ```
+
+### Evaluation Pipeline
+```
+evaluate(board)
+  ├── eval_tapered()        Material + MG/EG PST lookup
+  ├── eval_bishop_pair()    +35 cp bonus for both bishops
+  ├── eval_pawn_structure() Doubled, isolated, passed pawns
+  ├── eval_mobility()       Safe-square counting per piece
+  └── eval_king_safety()    Pawn shield + attacker zones (MG only)
+  
+  phase = weighted piece count (0=opening, 24=endgame)
+  final = (mg × phase + eg × (24 − phase)) / 24
+```
+
+---
 
 ## 📁 Repository Structure
 
 ```
 .
-├── engine/                 # C++20 5-Layer Chess Engine Source
-│   ├── board.cpp           # Layer 2 & 3: Board state, 32-bit Move packing, Zobrist hashing
-│   ├── eval_lut.cpp        # Layer 1: Centipawn values & Piece-Square Tables (PST)
-│   ├── magic_lut.cpp       # Layer 1: Precomputed magic bitboard lookups
-│   ├── main.cpp            # Layer 5: CLI interface & interactive persistent mode
-│   ├── rules.cpp           # Layer 4: MoveGenerator, MoveList (MVV-LVA), checkmate/stalemate
-│   └── search.cpp          # Layer 5: Minimax, 32MB Transposition Table, evaluation
-├── .gitignore              # Repository Git ignore rules
-├── game.exe                # Compiled C++ Engine Binary (32MB Transposition Table)
-├── OPERATIONS_MANUAL.md    # Deep C++ Engine Developer Manual
-└── README.md               # You are here!
+├── engine/                 # C++20 Chess Engine Source
+│   ├── magic_lut.cpp       # Layer 1: Magic bitboard tables
+│   ├── board.cpp           # Layer 2-3: Board state, Zobrist hash
+│   ├── rules.cpp           # Layer 3: Legal move generation
+│   ├── eval.cpp            # Layer 1+3: Tapered eval, PSTs, old_evaluate()
+│   ├── search.cpp          # Layer 4: Enhanced search engine
+│   ├── main.cpp            # Layer 5: CLI entry point
+│   ├── benchmark.cpp       # Standalone benchmark (included by Test/bench/)
+│   ├── oldsearch.cpp       # Legacy search (for A/B comparison)
+│   └── uci_main.cpp        # Minimal UCI-only entry
+│
+├── Test/                   # Testing & Benchmarking
+│   ├── bench/              # Side-by-side benchmark runners
+│   ├── match/              # Head-to-head match engine
+│   ├── scripts/            # Python orchestration
+│   ├── regression/         # 87 automated tests
+│   └── output/             # Benchmark results
+│
+├── archive/                # Old code, experiments, docs
+├── game.exe                # Compiled engine binary (~200 KB)
+├── OPERATIONS_MANUAL.md    # Detailed developer manual
+└── README.md               # This file
 ```
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run all 87 tests
+python Test/regression/run_all_tests.py
+
+# Quick benchmark comparison
+cd Test/bench && ./bench_new.exe && ./bench_old.exe
+
+# Play a match at depth 6
+cd Test/match && ./NewMatchmaker.exe 6 4
+
+# Full benchmark with 200 tactical puzzles
+python Test/scripts/run_multithreaded_benchmark.py
+```
+
+---
+
+## 📖 Documentation
+
+* **[OPERATIONS_MANUAL.md](OPERATIONS_MANUAL.md)** — Full developer manual: data encodings, file-by-file breakdown, include dependencies, search internals, evaluation pipeline.
+* **[Test/README.md](Test/README.md)** — Complete test suite documentation.
+* **[AGENTS.md](AGENTS.md)** — AI agent conventions for this project.
+* **[SOP.md](SOP.md)** — Standard Operating Procedures.

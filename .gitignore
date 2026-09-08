@@ -1,18 +1,23 @@
-# Compiled C++ binaries & objects
 *.exe
 *.o
 *.obj
 *.out
 
-# Local multi-game rating farmer (not committed to git)
-lichess_multibot.py
 __pycache__/
+*.pyc
+*.pyo
+
 # Environment & secrets
 .env
-old_files/
+
+# Archive folder (local reference only)
+archive/
+Test/
+engine/benchmark.cpp
 # Editor & OS files
 .vscode/
 .agents/
-SOP.md
-.DS_Store
-Thumbs.db
+.freebuff/
+
+
+
