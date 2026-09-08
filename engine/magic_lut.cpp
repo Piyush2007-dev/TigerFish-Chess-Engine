@@ -1,5 +1,12 @@
+#pragma once
 #include <cstdint>
 #include <array>
+#include <bit>
+#if defined(_MSC_VER)
+    #include <intrin.h>
+#else
+    #include <immintrin.h>
+#endif
 
 using namespace std;
 
@@ -93,11 +100,15 @@ int BISHOP_SHIFT[64];
 uint64_t ROOK_MASK[64];
 uint64_t BISHOP_MASK[64];
 
-// ROOK_ATTACKS[sq][idx] — precomputed attack bitboard for rook on sq given blocker pattern hashing to idx; 4096 = 2^12 worst case
-uint64_t ROOK_ATTACKS[64][4096];
+// Dense flat attack tables — one contiguous array per piece type; each square's pointer maps into it.
+// Saves ~1.5 MB vs the old [64][4096]/[64][512] fixed 2D arrays by allocating only 2^popcount(mask) entries per square.
+// Rook total: 102,400 entries (800 KB) vs old 262,144 (2 MB).  Bishop total: 5,248 (41 KB) vs old 32,768 (256 KB).
+inline uint64_t ROOK_TABLE[102400];
+inline uint64_t BISHOP_TABLE[5248];
 
-// BISHOP_ATTACKS[sq][idx] — same as ROOK_ATTACKS but for bishop diagonals; 512 = 2^9 worst case
-uint64_t BISHOP_ATTACKS[64][512];
+// Per-square pointers into the flat tables — ROOK_ATTACKS[sq][idx] syntax preserved
+inline uint64_t* ROOK_ATTACKS[64];
+inline uint64_t* BISHOP_ATTACKS[64];
 
 // compute_rook_attacks — slides outward N/S/E/W from sq, stops AT first blocker (inclusive); slow, only called during init_magics()
 static uint64_t compute_rook_attacks(int sq, uint64_t blockers){
@@ -126,11 +137,17 @@ static uint64_t next_subset(uint64_t sub, uint64_t mask){
     return (sub-1)&mask;
 }
 
-// init_magics — fills ROOK_ATTACKS and BISHOP_ATTACKS; called once at startup; for each sq enumerates all blocker subsets and stores precomputed attacks at their magic hash index
+// init_magics — fills ROOK_ATTACKS and BISHOP_ATTACKS; called once at startup.
+// Computes blocker masks, maps each square's pointer into the dense flat table,
+// enumerates all blocker subsets, and stores precomputed attacks at their hash index.
+// With BMI2: uses PEXT for perfect minimal indexing (1 instruction). Without: classic magic multiply+shift (3 instructions).
 inline void init_magics(){
     static bool initialized = false;
     if(initialized) return;
     initialized = true;
+
+    uint64_t* rook_ptr = ROOK_TABLE;
+    uint64_t* bishop_ptr = BISHOP_TABLE;
 
     for(int sq=0;sq<64;sq++){
         int r=sq/8,f=sq%8;
@@ -151,19 +168,37 @@ inline void init_magics(){
         BISHOP_MASK[sq]=bmask;
         BISHOP_SHIFT[sq]=64-std::popcount(bmask);
 
-        uint64_t rsub=0; // current rook blocker subset being processed
+        // Point this square's attacks into the dense flat array
+        ROOK_ATTACKS[sq] = rook_ptr;
+        BISHOP_ATTACKS[sq] = bishop_ptr;
+
+        // Carry-ripple enumeration of all 2^N blocker subsets.
+        // do-while is correct: processes sub=0 (empty board) on the first iteration
+        // before the while-check, then iterates all non-zero subsets until wrapping back to 0.
+        uint64_t rsub=0;
         do{
+#if defined(__BMI2__)
+            int idx=(int)_pext_u64(rsub, rmask);           // PEXT: perfect minimal index, zero collisions
+#else
             int idx=(int)((rsub*ROOK_MAGICS[sq])>>ROOK_SHIFT[sq]); // magic hash → compact table index
+#endif
             ROOK_ATTACKS[sq][idx]=compute_rook_attacks(sq,rsub);
-            rsub=next_subset(rsub,rmask); // advance to next blocker combination
+            rsub=next_subset(rsub,rmask);
         }while(rsub!=0);
 
-        uint64_t bsub=0; // current bishop blocker subset being processed
+        uint64_t bsub=0;
         do{
+#if defined(__BMI2__)
+            int idx=(int)_pext_u64(bsub, bmask);           // PEXT: perfect minimal index
+#else
             int idx=(int)((bsub*BISHOP_MAGICS[sq])>>BISHOP_SHIFT[sq]);
+#endif
             BISHOP_ATTACKS[sq][idx]=compute_bishop_attacks(sq,bsub);
             bsub=next_subset(bsub,bmask);
         }while(bsub!=0);
+
+        rook_ptr += (1 << std::popcount(rmask));
+        bishop_ptr += (1 << std::popcount(bmask));
     }
 }
 

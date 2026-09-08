@@ -1,3 +1,4 @@
+#pragma once
 #include <cstdint>
 #include <array>
 #include <utility>
@@ -7,6 +8,12 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#if defined(_MSC_VER)
+    #include <intrin.h>
+#else
+    #include <immintrin.h>
+#endif
+#include "pst_tables.h"
 
 using namespace std;
 
@@ -68,18 +75,54 @@ inline uint64_t RANK_2=0x000000000000FF00ULL;
 inline uint64_t RANK_7=0x00FF000000000000ULL;
 inline uint64_t RANK_8=0xFF00000000000000ULL;
 
-inline int lsb_index(uint64_t mask){
+// ── Portable Low-Level Hardware Bit Operations ─────────────────────────
+// On modern x86 with BMI/POPCNT/LZCNT: compiles to single 1-cycle CPU instructions.
+// On older/generic x86 or non-x86: transparently falls back to portable builtins / std::bit.
+
+inline int popcount64(uint64_t mask) {
+#if defined(__POPCNT__)
+    return (int)_mm_popcnt_u64(mask);
+#elif defined(__GNUC__) || defined(__clang__)
+    return __builtin_popcountll(mask);
+#else
+    return std::popcount(mask);
+#endif
+}
+
+inline int lsb_index(uint64_t mask) {
+#if defined(__BMI__)
+    return (int)_tzcnt_u64(mask);
+#elif defined(__GNUC__) || defined(__clang__)
+    return __builtin_ctzll(mask);
+#else
     return std::countr_zero(mask);
+#endif
 }
 
-inline int msb_index(uint64_t mask){
-    return 63-std::countl_zero(mask);
+inline int msb_index(uint64_t mask) {
+#if defined(__LZCNT__)
+    return 63 - (int)_lzcnt_u64(mask);
+#elif defined(__GNUC__) || defined(__clang__)
+    return 63 - __builtin_clzll(mask);
+#else
+    return 63 - std::countl_zero(mask);
+#endif
 }
 
-inline int pop_lsb(uint64_t &mask){
-    int sq=lsb_index(mask);
-    mask&=mask-1;
+inline int pop_lsb(uint64_t &mask) {
+#if defined(__BMI__)
+    int sq = (int)_tzcnt_u64(mask);
+    mask = _blsr_u64(mask);
     return sq;
+#elif defined(__GNUC__) || defined(__clang__)
+    int sq = __builtin_ctzll(mask);
+    mask &= mask - 1;
+    return sq;
+#else
+    int sq = std::countr_zero(mask);
+    mask &= mask - 1;
+    return sq;
+#endif
 }
 
 inline void print_bitboard(uint64_t bb){
@@ -95,72 +138,53 @@ inline void print_bitboard(uint64_t bb){
 
 #include "magic_lut.cpp"
 
-inline int move_from(uint32_t m){
+// 16-bit move layout: bits 0-5 from, bits 6-11 to, bits 12-15 flags
+inline int move_from(uint16_t m){
     return (int)(m&0x3Fu);
 }
 
-inline int move_to(uint32_t m){
+inline int move_to(uint16_t m){
     return (int)((m>>6)&0x3Fu);
 }
 
-inline Piece move_piece(uint32_t m){
-    return (Piece)((m>>12)&0xFu);
+inline int move_flags(uint16_t m){
+    return (int)((m>>12)&0xFu);
 }
 
-inline Piece move_captured_piece(uint32_t m){
-    return (Piece)((m>>16)&0xFu);
+inline bool move_is_capture(uint16_t m){
+    return ((m>>14)&1u)!=0;
 }
 
-inline Piece move_promotion_piece(uint32_t m){
-    return (Piece)((m>>20)&0xFu);
+inline bool move_is_promotion(uint16_t m){
+    return ((m>>15)&1u)!=0;
 }
 
-inline bool move_is_capture(uint32_t m){
-    return ((m>>16)&0xFu)!=0xFu;
+inline bool move_is_double_push(uint16_t m){
+    return move_flags(m)==0x1;
 }
 
-inline bool move_is_promotion(uint32_t m){
-    return ((m>>20)&0xFu)!=0xFu;
+inline bool move_is_castle(uint16_t m){
+    int f=move_flags(m);
+    return f==0x2||f==0x3;
 }
 
-inline uint8_t move_castling_rights(uint32_t m){
-    return (uint8_t)((m>>24)&0xFu);
+inline bool move_is_en_passant(uint16_t m){
+    return move_flags(m)==0x5;
 }
 
-inline bool move_is_castle(uint32_t m){
-    return ((m>>28)&0x1u)!=0;
+inline Piece move_promotion_piece_from_flags(uint16_t m,Color side){
+    int promo_type=(move_flags(m)&3)+1;
+    return (Piece)(promo_type+(side==BLACK?6:0));
 }
 
-inline bool move_is_en_passant(uint32_t m){
-    return ((m>>29)&0x1u)!=0;
+inline uint16_t pack_move(int from_square,int to_square,int flags){
+    return (uint16_t)((from_square&0x3F)|((to_square&0x3F)<<6)|((flags&0xF)<<12));
 }
 
-inline bool move_is_double_push(uint32_t m){
-    return ((m>>30)&0x1u)!=0;
-}
-
-inline Color move_side(uint32_t m){
-    return (Color)((m>>31)&0x1u);
-}
-
-inline uint32_t pack_move(int from_square,int to_square,Piece piece,
-                         uint32_t captured_piece=0xFu,uint32_t promotion_piece=0xFu,
-                         bool is_castle=false,bool is_en_passant=false,bool is_double_push=false){
-    uint32_t m=0;
-    m=((uint32_t)from_square&0x3Fu);
-    m|=(((uint32_t)to_square&0x3Fu)<<6);
-    m|=(((uint32_t)piece&0xFu)<<12);
-    m|=((captured_piece&0xFu)<<16);
-    m|=((promotion_piece&0xFu)<<20);
-    if(is_castle)m|=1u<<28;
-    if(is_en_passant)m|=1u<<29;
-    if(is_double_push)m|=1u<<30;
-    return m;
-}
-
-inline string move_to_uci(uint32_t m){
+inline string move_to_uci(uint16_t m){
     int f=move_from(m);
     int t=move_to(m);
+    int flags=move_flags(m);
     
     string uci="";
     uci+=(char)('a'+(f%8));
@@ -168,13 +192,9 @@ inline string move_to_uci(uint32_t m){
     uci+=(char)('a'+(t%8));
     uci+=(char)('1'+(t/8));
     
-    if(move_is_promotion(m)){
-        Piece promo=move_promotion_piece(m);
-        
-        if(promo==Piece::N||promo==Piece::n)uci+='n';
-        else if(promo==Piece::B||promo==Piece::b)uci+='b';
-        else if(promo==Piece::R||promo==Piece::r)uci+='r';
-        else if(promo==Piece::Q||promo==Piece::q)uci+='q';
+    if(flags&0x8){
+        static const char promo_chars[]={'n','b','r','q'};
+        uci+=promo_chars[flags&3];
     }
     
     return uci;
@@ -227,12 +247,26 @@ public:
     
     int halfmove_clock=0;
     int fullmove_number=1;
+    int material_score=0;
+    int phase_score=0;
+    int mg_pst=0;
+    int eg_pst=0;
     string START_FEN="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-    vector<uint32_t> move_history;
-    vector<uint8_t> ep_history;
-    vector<uint8_t> halfmove_history;
-    vector<uint64_t> zobrist_history;
+    struct UndoState {
+        uint16_t move;
+        uint8_t captured_piece;
+        uint8_t castling_rights;
+        uint8_t en_passant;
+        uint16_t halfmove_clock;
+        int material_score;
+        int phase_score;
+        int mg_pst;
+        int eg_pst;
+        uint64_t zobrist_hash;
+    };
+    UndoState history_stack[8192];
+    int history_ply = 0;
     uint64_t zobrist_hash = 0ULL;
 
     inline uint64_t get_ray(int direction,int square){
@@ -240,11 +274,7 @@ public:
     }
     Board(){
         init_zobrist();
-        move_history.reserve(4096);
-        ep_history.reserve(4096);
-        halfmove_history.reserve(4096);
-        zobrist_history.reserve(4096);
-        
+        history_ply=0;
         set_fen(START_FEN);
     }
 
@@ -265,28 +295,79 @@ public:
     }
     
 
-    void set_fen(string fen_string){
-        move_history.clear();
-        ep_history.clear();
-        halfmove_history.clear();
+    bool set_fen(string fen_string){
+        string fields[6];
+        int nfields=0;
+        istringstream input(fen_string);
+        string extra;
+        while (nfields < 6 && input >> fields[nfields]) nfields++;
+        if (nfields != 6 || (input >> extra)) return false;
+
+        int rank=7;
+        int file=0;
+        int white_kings=0;
+        int black_kings=0;
+        for(char c:fields[0]){
+            if(c=='/'){
+                if(file!=8 || rank==0) return false;
+                rank--;
+                file=0;
+            }else if(c>='1'&&c<='8'){
+                file+=c-'0';
+                if(file>8) return false;
+            }else{
+                if(c!='P'&&c!='N'&&c!='B'&&c!='R'&&c!='Q'&&c!='K'&&
+                   c!='p'&&c!='n'&&c!='b'&&c!='r'&&c!='q'&&c!='k') return false;
+                if((c=='P' && rank==7) || (c=='p' && rank==0)) return false;
+                if(c=='K') white_kings++;
+                if(c=='k') black_kings++;
+                if(++file>8) return false;
+            }
+        }
+        if(rank!=0 || file!=8 || white_kings!=1 || black_kings!=1) return false;
+        if(fields[1]!="w" && fields[1]!="b") return false;
+        if(fields[2]!="-"){
+            for(char c:fields[2]){
+                if(c!='K'&&c!='Q'&&c!='k'&&c!='q') return false;
+            }
+        }
+        if(fields[3]!="-"){
+            if(fields[3].size()!=2 || fields[3][0]<'a' || fields[3][0]>'h' ||
+               (fields[3][1]!='3' && fields[3][1]!='6')) return false;
+        }
+        auto valid_number=[](const string& value){
+            if(value.empty()) return false;
+            for(char c:value) if(c<'0'||c>'9') return false;
+            return true;
+        };
+        if(!valid_number(fields[4]) || !valid_number(fields[5])) return false;
+        int parsed_halfmove=0;
+        int parsed_fullmove=1;
+        try {
+            parsed_halfmove=stoi(fields[4]);
+            parsed_fullmove=stoi(fields[5]);
+        } catch (const exception&) {
+            return false;
+        }
+
+        history_ply=0;
+        castling_rights=0;
+        en_passant=255;
+        halfmove_clock=0;
+        fullmove_number=1;
+        material_score=0;
+        phase_score=0;
+        mg_pst=0;
+        eg_pst=0;
         
         for(int i=0;i<12;i++)bitboards[i]=0;
         for(int i=0;i<64;i++)piece_on[i]=(Piece)0xF;
         
         side_to_move=WHITE;
-        istringstream ss(fen_string);
-        string fields[6];
-        int nfields=0;
-        
-        while(ss>>fields[nfields]){
-            nfields++;
-            if(nfields>=6)break;
-        }
-        
-        if(nfields>0){
+        {
             string placement=fields[0];
-            int rank=7;
-            int file=0;
+            rank=7;
+            file=0;
             
             for(char c:placement){
                 if(c=='/'){
@@ -321,6 +402,18 @@ public:
                     if(p!=(Piece)0xF){
                         bitboards[p]|=1ULL<<sq;
                         piece_on[sq]=p;
+                        static const int piece_values[12] = {
+                            100, 320, 330, 500, 900, 20000,
+                            100, 320, 330, 500, 900, 20000
+                        };
+                        static const int phase_values[12] = {
+                            0, 1, 1, 2, 4, 0,
+                            0, 1, 1, 2, 4, 0
+                        };
+                        material_score += p < 6 ? piece_values[p] : -piece_values[p];
+                        phase_score += phase_values[p];
+                        mg_pst += PIECE_MG_PST[p][sq];
+                        eg_pst += PIECE_EG_PST[p][sq];
                     }
 
                     file++;
@@ -355,12 +448,13 @@ public:
             }
         }
         
-        if(nfields>4)halfmove_clock=stoi(fields[4]);
-        if(nfields>5)fullmove_number=stoi(fields[5]);
+        halfmove_clock=parsed_halfmove;
+        fullmove_number=parsed_fullmove;
         
-        zobrist_history.clear();
+        history_ply=0;
         update_occupancy();
         zobrist_hash=compute_zobrist_hash();
+        return true;
     }
 
     string to_fen() {
@@ -461,32 +555,41 @@ public:
         if(all_occ!=board.occupancy[2])cout<<"ALL OCC MISMATCH\n";
     }
 
-    void make_move(uint32_t move){
+    void make_move(uint16_t move){
         Color enemy=(side_to_move==WHITE)?BLACK:WHITE;
         
-        uint32_t packed_undo_move=pack_move(
-            move_from(move),move_to(move),move_piece(move),
-            (uint32_t)move_captured_piece(move),(uint32_t)move_promotion_piece(move),
-            move_is_castle(move),move_is_en_passant(move),move_is_double_push(move));
-            
-        packed_undo_move|=((uint32_t)castling_rights<<24);
-        packed_undo_move|=((uint32_t)side_to_move<<31);
-        
-        move_history.push_back(packed_undo_move);
-        ep_history.push_back(en_passant);
-        halfmove_history.push_back(halfmove_clock);
-        zobrist_history.push_back(zobrist_hash);
-        
-        uint8_t old_castling_rights = castling_rights;
-        uint8_t old_en_passant = en_passant;
-        
-        Piece piece=move_piece(move);
         int from_square=move_from(move);
         int to_square=move_to(move);
+        Piece piece=piece_on[from_square];
         bool is_capture=move_is_capture(move);
+        int flags=move_flags(move);
         
-        zobrist_hash ^= ZOBRIST_PIECE[piece][from_square];
-        zobrist_hash ^= ZOBRIST_PIECE[piece][to_square];
+        // Determine captured piece BEFORE modifying board
+        Piece captured_piece=(Piece)0xF;
+        if(flags==0x5){
+            captured_piece=(side_to_move==WHITE)?Piece::p:Piece::P;
+        }else if(is_capture){
+            captured_piece=piece_on[to_square];
+        }
+        
+        // Push undo state
+        history_stack[history_ply].move=move;
+        history_stack[history_ply].captured_piece=(uint8_t)captured_piece;
+        history_stack[history_ply].castling_rights=castling_rights;
+        history_stack[history_ply].en_passant=en_passant;
+        history_stack[history_ply].halfmove_clock=halfmove_clock;
+        history_stack[history_ply].material_score=material_score;
+        history_stack[history_ply].phase_score=phase_score;
+        history_stack[history_ply].mg_pst=mg_pst;
+        history_stack[history_ply].eg_pst=eg_pst;
+        history_stack[history_ply].zobrist_hash=zobrist_hash;
+        history_ply++;
+        
+        uint8_t old_castling_rights=castling_rights;
+        uint8_t old_en_passant=en_passant;
+        
+        zobrist_hash^=ZOBRIST_PIECE[piece][from_square];
+        zobrist_hash^=ZOBRIST_PIECE[piece][to_square];
         
         uint64_t from_mask=1ULL<<from_square;
         uint64_t to_mask=1ULL<<to_square;
@@ -498,58 +601,77 @@ public:
         bitboards[piece]^=from_mask|to_mask;
         piece_on[from_square]=(Piece)0xF;
         piece_on[to_square]=piece;
+        mg_pst += PIECE_MG_PST[piece][to_square] - PIECE_MG_PST[piece][from_square];
+        eg_pst += PIECE_EG_PST[piece][to_square] - PIECE_EG_PST[piece][from_square];
+        
+        occupancy[side_to_move]^=from_mask|to_mask;
+        occupancy[2]^=from_mask|to_mask;
         
         if(move_is_promotion(move)){
-            Piece promo=move_promotion_piece(move);
+            Piece promo=move_promotion_piece_from_flags(move,side_to_move);
             bitboards[piece]^=to_mask;
             bitboards[promo]^=to_mask;
             piece_on[to_square]=promo;
-
-            zobrist_hash ^= ZOBRIST_PIECE[piece][to_square];
-            zobrist_hash ^= ZOBRIST_PIECE[promo][to_square];
+            zobrist_hash^=ZOBRIST_PIECE[piece][to_square];
+            zobrist_hash^=ZOBRIST_PIECE[promo][to_square];
+            mg_pst += PIECE_MG_PST[promo][to_square] - PIECE_MG_PST[piece][to_square];
+            eg_pst += PIECE_EG_PST[promo][to_square] - PIECE_EG_PST[piece][to_square];
         }
         
         if(is_capture){
             if(move_is_en_passant(move)){
                 int cap_sq=(side_to_move==WHITE)?to_square-8:to_square+8;
-                Piece cap_pawn=(side_to_move==WHITE)?Piece::p:Piece::P;
                 uint64_t cap_mask=1ULL<<cap_sq;
-                
                 piece_on[cap_sq]=(Piece)0xF;
-                bitboards[cap_pawn]^=cap_mask;
+                bitboards[captured_piece]^=cap_mask;
                 occupancy[enemy]^=cap_mask;
                 occupancy[2]^=cap_mask;
-
-                zobrist_hash ^= ZOBRIST_PIECE[cap_pawn][cap_sq];
+                zobrist_hash^=ZOBRIST_PIECE[captured_piece][cap_sq];
+                mg_pst -= PIECE_MG_PST[captured_piece][cap_sq];
+                eg_pst -= PIECE_EG_PST[captured_piece][cap_sq];
             }else{
-                Piece captured=move_captured_piece(move);
-                bitboards[captured]^=to_mask;
+                bitboards[captured_piece]^=to_mask;
                 occupancy[enemy]^=to_mask;
                 occupancy[2]^=to_mask;
-
-                zobrist_hash ^= ZOBRIST_PIECE[captured][to_square];
+                zobrist_hash^=ZOBRIST_PIECE[captured_piece][to_square];
+                mg_pst -= PIECE_MG_PST[captured_piece][to_square];
+                eg_pst -= PIECE_EG_PST[captured_piece][to_square];
             }
+        }
+        
+        static const int piece_values[12]={100,320,330,500,900,20000,100,320,330,500,900,20000};
+        static const int phase_values[12]={0,1,1,2,4,0,0,1,1,2,4,0};
+        if(is_capture){
+            if((int)captured_piece<12){
+                material_score+=captured_piece<6?-piece_values[captured_piece]:piece_values[captured_piece];
+                phase_score-=phase_values[captured_piece];
+            }
+        }
+        if(move_is_promotion(move)){
+            Piece promotion=move_promotion_piece_from_flags(move,side_to_move);
+            material_score+=piece<6?piece_values[promotion]-piece_values[piece]:-(piece_values[promotion]-piece_values[piece]);
+            phase_score+=phase_values[promotion]-phase_values[piece];
         }
         
         if(move_is_castle(move)){
             uint64_t rook_from,rook_to;
             Piece rook_piece;
-            int r_from_sq, r_to_sq;
+            int r_from_sq,r_to_sq;
             
             if(to_square==6){
-                r_from_sq=7; r_to_sq=5; rook_piece=Piece::R;
+                r_from_sq=7;r_to_sq=5;rook_piece=Piece::R;
                 rook_from=1ULL<<7;rook_to=1ULL<<5;
                 piece_on[7]=(Piece)0xF;piece_on[5]=Piece::R;
             }else if(to_square==2){
-                r_from_sq=0; r_to_sq=3; rook_piece=Piece::R;
+                r_from_sq=0;r_to_sq=3;rook_piece=Piece::R;
                 rook_from=1ULL<<0;rook_to=1ULL<<3;
                 piece_on[0]=(Piece)0xF;piece_on[3]=Piece::R;
             }else if(to_square==62){
-                r_from_sq=63; r_to_sq=61; rook_piece=Piece::r;
+                r_from_sq=63;r_to_sq=61;rook_piece=Piece::r;
                 rook_from=1ULL<<63;rook_to=1ULL<<61;
                 piece_on[63]=(Piece)0xF;piece_on[61]=Piece::r;
             }else{
-                r_from_sq=56; r_to_sq=59; rook_piece=Piece::r;
+                r_from_sq=56;r_to_sq=59;rook_piece=Piece::r;
                 rook_from=1ULL<<56;rook_to=1ULL<<59;
                 piece_on[56]=(Piece)0xF;piece_on[59]=Piece::r;
             }
@@ -557,9 +679,10 @@ public:
             bitboards[rook_piece]^=rook_from|rook_to;
             occupancy[side_to_move]^=rook_from|rook_to;
             occupancy[2]^=rook_from|rook_to;
-
-            zobrist_hash ^= ZOBRIST_PIECE[rook_piece][r_from_sq];
-            zobrist_hash ^= ZOBRIST_PIECE[rook_piece][r_to_sq];
+            zobrist_hash^=ZOBRIST_PIECE[rook_piece][r_from_sq];
+            zobrist_hash^=ZOBRIST_PIECE[rook_piece][r_to_sq];
+            mg_pst += PIECE_MG_PST[rook_piece][r_to_sq] - PIECE_MG_PST[rook_piece][r_from_sq];
+            eg_pst += PIECE_EG_PST[rook_piece][r_to_sq] - PIECE_EG_PST[rook_piece][r_from_sq];
         }
         
         if(piece==Piece::K)castling_rights&=~(WHITE_KING_SIDE|WHITE_QUEEN_SIDE);
@@ -581,57 +704,62 @@ public:
             if(to_square==56)castling_rights&=~BLACK_QUEEN_SIDE;
         }
         
-        if(move_is_double_push(move)){
+        if(flags==0x1){
             en_passant=(piece==Piece::P)?to_square-8:to_square+8;
         }else{
             en_passant=255;
         }
         
-        zobrist_hash ^= ZOBRIST_CASTLING[old_castling_rights & 0xFu];
-        zobrist_hash ^= ZOBRIST_CASTLING[castling_rights & 0xFu];
-
-        zobrist_hash ^= ZOBRIST_EP[old_en_passant == 255 ? 64 : old_en_passant];
-        zobrist_hash ^= ZOBRIST_EP[en_passant == 255 ? 64 : en_passant];
-
-        zobrist_hash ^= ZOBRIST_SIDE;
+        zobrist_hash^=ZOBRIST_CASTLING[old_castling_rights&0xFu];
+        zobrist_hash^=ZOBRIST_CASTLING[castling_rights&0xFu];
+        zobrist_hash^=ZOBRIST_EP[old_en_passant==255?64:old_en_passant];
+        zobrist_hash^=ZOBRIST_EP[en_passant==255?64:en_passant];
+        zobrist_hash^=ZOBRIST_SIDE;
         
         if(side_to_move==BLACK)fullmove_number++;
         side_to_move=(side_to_move==WHITE)?BLACK:WHITE;
         enemy_color=(side_to_move==WHITE)?BLACK:WHITE;
-        
-        update_occupancy();
     }
 
     void unmake_move(){
-        uint32_t move=move_history.back();
-        move_history.pop_back();
+        history_ply--;
+        UndoState &undo=history_stack[history_ply];
         
-        castling_rights=move_castling_rights(move);
-        en_passant=ep_history.back();
-        ep_history.pop_back();
-        halfmove_clock=halfmove_history.back();
-        halfmove_history.pop_back();
-
-        zobrist_hash=zobrist_history.back();
-        zobrist_history.pop_back();
+        uint16_t move=undo.move;
+        castling_rights=undo.castling_rights;
+        en_passant=undo.en_passant;
+        halfmove_clock=undo.halfmove_clock;
+        material_score=undo.material_score;
+        phase_score=undo.phase_score;
+        mg_pst=undo.mg_pst;
+        eg_pst=undo.eg_pst;
+        zobrist_hash=undo.zobrist_hash;
+        Piece captured_piece=(Piece)undo.captured_piece;
         
-        Piece piece=move_piece(move);
         int from_square=move_from(move);
         int to_square=move_to(move);
-        bool is_capture=move_is_capture(move);
         
-        uint64_t from_mask=1ULL<<from_square;
-        uint64_t to_mask=1ULL<<to_square;
-        
+        // Flip side first
         side_to_move=(side_to_move==WHITE)?BLACK:WHITE;
         enemy_color=(side_to_move==WHITE)?BLACK:WHITE;
         if(side_to_move==BLACK)fullmove_number--;
         
+        // Determine the moving piece
+        Piece piece;
+        if(move_is_promotion(move)){
+            piece=(side_to_move==WHITE)?Piece::P:Piece::p;
+        }else{
+            piece=piece_on[to_square];
+        }
+        
         piece_on[from_square]=piece;
         piece_on[to_square]=(Piece)0xF;
         
+        uint64_t from_mask=1ULL<<from_square;
+        uint64_t to_mask=1ULL<<to_square;
+        
         if(move_is_promotion(move)){
-            Piece promo=move_promotion_piece(move);
+            Piece promo=move_promotion_piece_from_flags(move,side_to_move);
             bitboards[promo]^=to_mask;
             bitboards[piece]^=from_mask;
         }else{
@@ -664,21 +792,17 @@ public:
         occupancy[side_to_move]^=from_mask|to_mask;
         occupancy[2]^=from_mask|to_mask;
         
-        if(is_capture){
+        if(move_is_capture(move)){
             if(move_is_en_passant(move)){
-                int cap_sq=(move_side(move)==WHITE)?to_square-8:to_square+8;
-                Piece cap_pawn=(move_side(move)==WHITE)?Piece::p:Piece::P;
+                int cap_sq=(side_to_move==WHITE)?to_square-8:to_square+8;
                 uint64_t cap_mask=1ULL<<cap_sq;
-                
-                piece_on[cap_sq]=cap_pawn;
-                bitboards[cap_pawn]|=cap_mask;
+                piece_on[cap_sq]=captured_piece;
+                bitboards[captured_piece]|=cap_mask;
                 occupancy[enemy_color]|=cap_mask;
                 occupancy[2]|=cap_mask;
             }else{
-                Piece captured=move_captured_piece(move);
-                
-                piece_on[to_square]=captured;
-                bitboards[captured]|=to_mask;
+                piece_on[to_square]=captured_piece;
+                bitboards[captured_piece]|=to_mask;
                 occupancy[enemy_color]|=to_mask;
                 occupancy[2]|=to_mask;
             }
@@ -687,11 +811,11 @@ public:
 
     inline bool is_repetition(int count = 3) const {
         int occurrences = 1;
-        int limit = std::min((int)zobrist_history.size(), halfmove_clock);
-        int start_idx = (int)zobrist_history.size() - 2; 
+        int limit = std::min(history_ply, (int)halfmove_clock);
+        int start_idx = history_ply - 2;
 
-        for (int i = start_idx; i >= (int)zobrist_history.size() - limit; i -= 2) {
-            if (i >= 0 && zobrist_history[i] == zobrist_hash) {
+        for (int i = start_idx; i >= history_ply - limit; i -= 2) {
+            if (i >= 0 && history_stack[i].zobrist_hash == zobrist_hash) {
                 occurrences++;
                 if (occurrences >= count) return true;
             }
