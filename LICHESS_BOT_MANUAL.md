@@ -10,8 +10,9 @@
 2. [Single-Game Bot (`lichess_bot.py`)](#2-single-game-bot-lichess_botpy)
 3. [Multi-Game Bot Farmer (`lichess_multibot.py`)](#3-multi-game-bot-farmer-lichess_multibotpy)
 4. [IPC Protocol with `game.exe interactive`](#4-ipc-protocol-with-gameexe-interactive)
-5. [Resilient Move Posting & Retry Mechanism](#5-resilient-move-posting--retry-mechanism)
-6. [How to Test & Challenge Bots (Browser & CLI)](#6-how-to-test--challenge-bots-browser--cli)
+5. [Dynamic Clock & Time Management](#5-dynamic-clock--time-management)
+6. [Resilient Move Posting & Retry Mechanism](#6-resilient-move-posting--retry-mechanism)
+7. [How to Test & Challenge Bots (Browser & CLI)](#7-how-to-test--challenge-bots-browser--cli)
 
 ---
 
@@ -42,27 +43,28 @@ Handles **1 game at a time**. Ideal for testing, casual play, or debugging.
 - Dynamically queries `/api/account` on startup to detect the account's username.
 - Auto-accepts all incoming standard variant challenges.
 - Runs a lightweight health check HTTP server on port 10000.
-- Configurable search depth (default 6).
+- Dynamic clock time allocation + configurable search depth ceiling (default 12).
 
 ### Usage Command:
 ```bash
-python lichess_bot.py --depth 6
+python lichess_bot.py --depth 12 --time 2000
 ```
 
 ---
 
 ## 3. Multi-Game Bot Farmer (`lichess_multibot.py`)
 
-Handles **up to 10 parallel games simultaneously** and actively seeks games against online bots.
+Handles **up to 16 parallel games simultaneously** and actively seeks games against online bots.
 
 ### Features:
 - **Auto-Seeker**: Continuously seeks matches against online bots across 11 time controls (1+0 bullet to 5+3 blitz).
+- **Adaptive Time Manager**: Calculates per-move search budgets (`time_ms`) based on clock and increment to avoid flagging.
 - **Rejection Memory**: Blacklists bots that refuse bot challenges and skips time controls previously declined by specific bots.
 - **Graceful Shutdown**: Pressing `q` + Enter or sending `Ctrl+C` halts new challenges and lets active matches finish cleanly before exiting.
 
 ### Usage Command:
 ```bash
-python lichess_multibot.py --max-games 10 --depth 7
+python lichess_multibot.py --max-games 16 --depth 12
 ```
 
 ---
@@ -75,12 +77,26 @@ For every match, the bridge spawns a dedicated long-running `game.exe interactiv
 | :--- | :--- | :--- | :--- |
 | `newgame [fen]` | Python $\to$ Engine | Sets up board position. Retains Transposition Table. | `{"status": "ready"}` + `===READY===` |
 | `apply <uci>` | Python $\to$ Engine | Applies opponent move to internal board (depth 0). | `{"fen": "...", "status": "..."}` + `===READY===` |
-| `best <depth>` | Python $\to$ Engine | Evaluates position at depth, plays best move, advances board. | `{"best_move": "uci", ...}` + `===READY===` |
+| `best <depth> [time_ms]` | Python $\to$ Engine | Evaluates position up to depth or until time budget expires, plays best move, advances board. | `{"best_move": "uci", ...}` + `===READY===` |
 | `quit` | Python $\to$ Engine | Terminates engine process gracefully. | Process exits |
 
 ---
 
-## 5. Resilient Move Posting & Retry Mechanism
+## 5. Dynamic Clock & Time Management
+
+Both single-bot and multi-bot bridges use `calculate_search_time()` to allocate search budgets dynamically on every move:
+
+1. **Network Lag Buffer**: Deducts 100ms for HTTP transmission latency.
+2. **Standard Allocation**: `usable_time / 25 + (increment * 0.75)`.
+3. **Adaptive Panic Caps**:
+   - Time $< 1.5$s: Capped at 30% of remaining time to prevent flagging.
+   - Time $< 5.0$s: Capped at 25% of remaining time.
+   - Time $\ge 5.0$s: Capped at 20% of remaining time.
+4. **Adaptive Depth**: High depth ceiling (14–16) when clock is healthy; scales down to depth 6–10 in extreme scrambles.
+
+---
+
+## 6. Resilient Move Posting & Retry Mechanism
 
 To protect against transient Windows network socket timeouts (`WinError 121: The semaphore timeout period has expired`), move submissions use a **3-attempt retry loop** with exponential backoff:
 
@@ -101,7 +117,7 @@ async def send_move(self, game_id: str, move_uci: str):
 
 ---
 
-## 6. Local Override & Render Standby Handshake
+## 7. Local Override & Render Standby Handshake
 
 To prevent dual-instance connection conflicts, duplicate move submissions, and `HTTP 429 Rate Limiting` when launching `lichess_bot.py` locally while a Render deployment is active:
 
@@ -121,7 +137,7 @@ To prevent dual-instance connection conflicts, duplicate move submissions, and `
 
 ---
 
-## 7. How to Test & Challenge Bots (Browser & CLI)
+## 8. How to Test & Challenge Bots (Browser & CLI)
 
 ### Method A: Challenge a Bot from the Lichess Website (Browser)
 1. Run `python lichess_bot.py` in your terminal.

@@ -322,6 +322,12 @@ int run_interactive() {
         } else if (command == "best") {
             int depth = 7;
             input >> depth;
+            int time_ms = 0;
+            if (input >> time_ms && time_ms > 0) {
+                engine.configure_search(0, time_ms, nullptr);
+            } else {
+                engine.configure_search(0, 0, nullptr);
+            }
             if (get_game_result(board) != GAME_ONGOING) {
                 cout << "{\"best_move\": \"\", \"status\": \"game_over\"}" << endl;
             } else {
@@ -484,11 +490,12 @@ int main(int argc, char* argv[]) {
 
     if (command == "best") {
         if (argc < 3) {
-            cerr << "Usage: " << argv[0] << " best \"<fen>\" [depth]" << endl;
+            cerr << "Usage: " << argv[0] << " best \"<fen>\" [depth] [time_ms]" << endl;
             return 1;
         }
         string fen = argv[2];
         int depth = (argc >= 4) ? atoi(argv[3]) : 7;
+        int time_ms = (argc >= 5) ? atoi(argv[4]) : 0;
 
         Board board;
         if (!board.set_fen(fen)) {
@@ -497,6 +504,7 @@ int main(int argc, char* argv[]) {
         }
 
         Engine engine;
+        if (time_ms > 0) engine.configure_search(0, time_ms, nullptr);
         uint16_t best = engine.best_move(board, depth);
         string best_uci = (best != 0) ? move_to_uci(best) : "";
 

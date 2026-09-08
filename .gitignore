@@ -4,8 +4,6 @@
 *.obj
 *.out
 
-# Local multi-game rating farmer (not committed to git)
-lichess_multibot.py
 __pycache__/
 # Environment & secrets
 .env

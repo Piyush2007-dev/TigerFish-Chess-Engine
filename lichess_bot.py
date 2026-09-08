@@ -68,11 +68,51 @@ def start_health_server():
     except Exception as e:
         logger.warning(f"Health check server could not start on port {port}: {e}")
 
+def calculate_search_time(state: dict, my_color: str, default_time_ms: int = 2000) -> int:
+    """
+    Calculate optimal search time budget in milliseconds based on remaining clock and increment.
+    Protects against flagging with adaptive panic caps and network latency buffers.
+    """
+    if not state:
+        return default_time_ms
+
+    time_key = "wtime" if my_color == "white" else "btime"
+    inc_key = "winc" if my_color == "white" else "binc"
+
+    remaining = state.get(time_key)
+    inc = state.get(inc_key, 0) or 0
+
+    if remaining is None or remaining <= 0:
+        return default_time_ms
+
+    # Network latency safety buffer (100ms for HTTP transmission round-trip)
+    lag_buffer = 100
+    safe_remaining = max(50, remaining - lag_buffer)
+
+    # Base target allocation: 1/25th of remaining time + 75% of increment
+    allocated = (safe_remaining / 25.0) + (inc * 0.75)
+
+    # Adaptive upper bound caps:
+    if safe_remaining < 1500:
+        # Emergency scramble: spend at most 30% of remaining to never flag
+        allocated = min(allocated, safe_remaining * 0.30)
+    elif safe_remaining < 5000:
+        # Low time: spend at most 25% of remaining
+        allocated = min(allocated, safe_remaining * 0.25)
+    else:
+        # Standard time: cap at 20% of remaining
+        allocated = min(allocated, safe_remaining * 0.20)
+
+    # Minimum threshold: at least 50ms so engine completes shallow iterations
+    allocated = max(50, min(allocated, safe_remaining))
+
+    return int(allocated)
+
 # ── Per-Game Persistent Engine Subprocess ──────────────────────────────
 class GameEngineProcess:
     """Manages a single persistent `game.exe interactive` subprocess with TT."""
 
-    def __init__(self, engine_path: str, depth: int = 7):
+    def __init__(self, engine_path: str, depth: int = 12):
         self.engine_path = engine_path
         self.depth = depth
         self._proc: asyncio.subprocess.Process = None
@@ -117,9 +157,12 @@ class GameEngineProcess:
         """Apply opponent's move to the persistent board."""
         return await self._send(f"apply {uci_move}")
 
-    async def best_move(self) -> dict:
-        """Search from current position. Returns dict with 'best_move', 'fen', 'status'."""
-        return await self._send(f"best {self.depth}")
+    async def best_move(self, depth: int = None, time_ms: int = None) -> dict:
+        """Search from current position with depth and optional time limit in ms."""
+        d = depth if depth is not None else self.depth
+        if time_ms is not None and time_ms > 0:
+            return await self._send(f"best {d} {int(time_ms)}")
+        return await self._send(f"best {d}")
 
     async def stop(self):
         """Gracefully terminate the engine subprocess."""
@@ -149,6 +192,13 @@ class LichessBot:
             raise FileNotFoundError(f"Engine executable not found at: {self.engine_path}")
 
     async def start(self):
+        # Run startup preflight checks & display search/clock constants in terminal
+        try:
+            from test_bot_startup import run_startup_test
+            run_startup_test(self.engine_path)
+        except Exception as e:
+            logger.warning(f"Startup preflight test encountered error: {e}")
+
         start_health_server()
         connector = aiohttp.TCPConnector(limit=10)
         async with aiohttp.ClientSession(headers=self.headers, connector=connector) as session:
@@ -403,8 +453,24 @@ class LichessBot:
         if total_moves < processed_moves_count:
             return None
 
+        # Compute dynamic time allocation based on clock & increment
+        allocated_time_ms = calculate_search_time(state, my_color)
+
+        # Adaptive search depth ceiling based on time budget
+        search_depth = self.search_depth
+        if allocated_time_ms is not None:
+            if allocated_time_ms < 200:
+                search_depth = min(search_depth, 6)
+            elif allocated_time_ms < 500:
+                search_depth = min(search_depth, 8)
+            elif allocated_time_ms < 1000:
+                search_depth = min(search_depth, 10)
+            elif allocated_time_ms >= 1000:
+                search_depth = max(search_depth, 14)
+
         start_time = time.time()
-        logger.info(f"[{game_id}] TigerFish thinking at depth {self.search_depth} (move #{total_moves + 1})...")
+        budget_str = f" ({allocated_time_ms}ms budget)" if allocated_time_ms is not None else ""
+        logger.info(f"[{game_id}] TigerFish thinking at depth {search_depth}{budget_str} (move #{total_moves + 1})...")
 
         new_moves = moves_list[processed_moves_count:]
         for move in new_moves:
@@ -413,7 +479,7 @@ class LichessBot:
                 logger.error(f"[{game_id}] apply {move} failed: {res['error']}")
                 return None
 
-        res = await engine_proc.best_move()
+        res = await engine_proc.best_move(depth=search_depth, time_ms=allocated_time_ms)
         elapsed_ms = int((time.time() - start_time) * 1000)
 
         bot_move = res.get("best_move", "")
@@ -459,7 +525,8 @@ def main():
     parser = argparse.ArgumentParser(description="TigerFish Lichess Bot Bridge")
     parser.add_argument("--token", type=str, help="Lichess API Token", default=os.getenv("LICHESS_TOKEN"))
     parser.add_argument("--engine", type=str, help="Path to game.exe", default=DEFAULT_ENGINE_PATH)
-    parser.add_argument("--depth", type=int, help="Engine search depth", default=6)
+    parser.add_argument("--depth", type=int, help="Engine search depth ceiling (default: 12)", default=12)
+    parser.add_argument("--time", type=int, help="Fallback search time budget in ms for untimed games (default: 2000)", default=2000)
     args = parser.parse_args()
 
     token = args.token
