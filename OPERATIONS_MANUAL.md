@@ -1,298 +1,254 @@
-# TigerFish Chess Engine & Lichess Bridge — Operations Manual
+# TigerFish 2.0 Chess Engine & Lichess Bridge — Operations Manual
 
 > **Audience**: Developers maintaining, optimizing, or extending the engine or Lichess bot bridge.  
-> **Build**: `g++ -O2 -std=c++20 -o game.exe engine/main.cpp`  
-> **Entry Point**: `engine/main.cpp` includes `search.cpp` which cascades down to all rules and lookup tables.
+> **Build**: `g++ -O3 -march=native -std=c++20 -pthread engine/main.cpp -o game.exe`  
+> **Entry Point**: `engine/main.cpp` dispatches between UCI protocol and TigerFish CLI/JSON commands.
 
 ---
 
 ## Table of Contents
 1. [Architecture & Layer Hierarchy](#1-architecture--layer-hierarchy)
-2. [Include Cascade & Dependencies](#2-include-cascade--dependencies)
+2. [Include Cascade & Single Translation Unit](#2-include-cascade--single-translation-unit)
 3. [Data Representations & Encoding Conventions](#3-data-representations--encoding-conventions)
-4. [File: magic_lut.cpp — Sliding Piece Magic Hash Tables](#4-file-magic_lutcpp--sliding-piece-magic-hash-tables)
-5. [File: eval_lut.cpp — Static Evaluation Lookup Tables](#5-file-eval_lutcpp--static-evaluation-lookup-tables)
-6. [File: board.cpp — Board State, Zobrist Hashing, Make/Unmake](#6-file-boardcpp--board-state-zobrist-hashing-makeunmake)
-7. [File: rules.cpp — Legal Move Generator & Rule Verification](#7-file-rulescpp--legal-move-generator--rule-verification)
-8. [File: search.cpp — Minimax, Transposition Table (32 MB), & Evaluation](#8-file-searchcpp--minimax-transposition-table-32-mb--evaluation)
-9. [File: main.cpp — CLI Engine Commands & Interactive Protocol](#9-file-maincpp--cli-engine-commands--interactive-protocol)
-10. [Lichess Bot Bridge (`lichess_multibot.py` & `lichess_bot.py`)](#10-lichess-bot-bridge-lichess_multibotpy--lichess_botpy)
-11. [Performance Profile, Assumptions & Future Optimisation Roadmap](#11-performance-profile-assumptions--future-optimisation-roadmap)
+4. [Bitboard Attack Calculation & PEXT Sliders (`bitboards.cpp`)](#4-bitboard-attack-calculation--pext-sliders-bitboardscpp)
+5. [Board State & Stack-Linked History (`position.cpp`)](#5-board-state--stack-linked-history-positioncpp)
+6. [Legal Move Generation & Bitboard Leaf Popcount (`movegen.cpp`)](#6-legal-move-generation--bitboard-leaf-popcount-movegencpp)
+7. [Lockless Cache-Aligned Transposition Table (`tt.cpp`)](#7-lockless-cache-aligned-transposition-table-ttcpp)
+8. [Tapered Static Evaluation (`eval.cpp`)](#8-tapered-static-evaluation-evalcpp)
+9. [Search Engine & Parallelism (`search.cpp`)](#9-search-engine--parallelism-searchcpp)
+10. [High-Performance Parallel Perft Engine (`perft.h`)](#10-high-performance-parallel-perft-engine-perfth)
+11. [CLI, UCI & Lichess Bot Bridge (`cli.cpp`, `uci.cpp`, `lichess_bot.py`)](#11-cli-uci--lichess-bot-bridge-clicpp-ucicpp-lichess_botpy)
+12. [Performance Profile & Verification Matrix](#12-performance-profile--verification-matrix)
 
 ---
 
 ## 1. Architecture & Layer Hierarchy
 
-```
-Layer 5: CLI & Interactive Protocol
-         engine/main.cpp
+TigerFish 2.0 is built on **Data-Oriented Design (DOD)** principles, completely replacing heavy OOP class abstractions with compact flat structs, hardware bitboards, and stack-allocated linked-list frames:
+
+```text
+Layer 5: CLI, UCI Protocol & Interactive Session
+         engine/cli.cpp   engine/uci.cpp
                |
-Layer 4: Search, Minimax & Transposition Table (32 MB)
-         engine/search.cpp
+Layer 4: Search Engine & Multiprocessor Parallelism
+         engine/search.cpp  (PVS, YBWC, Lazy SMP, WorkerPool)
                |
-Layer 3: Legal Move Generator & Rule Verification
-         engine/rules.cpp
+Layer 3: Evaluation, Transposition Table & Move Ordering
+         engine/eval.cpp   engine/tt.cpp   engine/opening_book.cpp   engine/tablebase.cpp
                |
-Layer 2: Board State, Zobrist Hash & Move Encoding
-         engine/board.cpp  <--- engine/magic_lut.cpp
+Layer 2: Legal Move Generation & Hardware Popcount
+         engine/movegen.cpp   engine/perft.h
                |
-Layer 1: Precomputed Magic & Evaluation Lookup Tables
-         engine/eval_lut.cpp   engine/magic_lut.cpp
+Layer 1: Position Representation & Stack-Linked State
+         engine/position.cpp   engine/zobrist.cpp
+               |
+Layer 0: Core Types & BMI2/PEXT Slider Bitboards
+         engine/types.cpp   engine/bitboards.cpp
 ```
 
 ### Architectural Principles
-- **Strict One-Way Dependency**: Every file depends strictly on layers below it. No circular includes, no forward declarations needed.
-- **Zero Heavy External Libraries**: Standard C++20 standard library only (`<cstdint>`, `<vector>`, `<string>`, `<chrono>`).
-- **Single Process / Persistent IPC Mode**: Supports both single-shot CLI execution and persistent stdin/stdout IPC streams.
+- **Strict Downward Dependency**: Every module depends strictly on the layers below it. Circular dependencies are strictly prohibited.
+- **Single Translation Unit (STU)**: The entire calculation engine compiles via `engine/main.cpp`. Link-time optimization (LTO) occurs naturally at compile-time with full inlining visibility across layers.
+- **Zero Dynamic Heap Allocations**: Hot search and move generation paths allocate zero heap memory (`malloc`/`new`). Board history is maintained on the execution call stack via `StateInfo` structs.
 
 ---
 
-## 2. Include Cascade & Dependencies
+## 2. Include Cascade & Single Translation Unit
 
-```
+```text
 engine/main.cpp
-  +-- engine/search.cpp
-        +-- engine/rules.cpp
-        |     +-- engine/board.cpp
-        |           +-- engine/magic_lut.cpp
-        +-- engine/eval_lut.cpp
+  ├── engine/types.cpp
+  ├── engine/bitboards.cpp
+  ├── engine/zobrist.cpp
+  ├── engine/position.cpp
+  ├── engine/movegen.cpp
+  ├── engine/tt.cpp
+  ├── engine/eval.cpp
+  ├── engine/search.cpp
+  ├── engine/opening_book.cpp
+  ├── engine/tablebase.cpp
+  ├── engine/rl_interface.cpp
+  ├── engine/uci.cpp
+  ├── engine/cli.cpp
+  └── engine/perft.h
 ```
-
-### Implications
-- Compiling `engine/main.cpp` compiles the entire engine into a single output executable (`game.exe`).
-- Header guards (`#pragma once`) are not used because every module is included exactly once in this linear chain.
 
 ---
 
 ## 3. Data Representations & Encoding Conventions
 
 ### Square Indexing (0 to 63)
-Squares are indexed 0 (a1) to 63 (h8):
-```
+Little-Endian Rank-File (LERF) mapping:
+```text
 a1=0   b1=1   c1=2   d1=3   e1=4   f1=5   g1=6   h1=7
 a2=8   b2=9   ...
 ...
 a8=56  b8=57  c8=58  d8=59  e8=60  f8=61  g8=62  h8=63
 ```
-Formula: `sq = rank * 8 + file` (rank 0 = rank 1, file 0 = a-file).
+Formula: `Square sq = static_cast<Square>(rank * 8 + file)`.
 
-### Piece Encoding (`enum Piece`)
+### Piece & PieceType Encoding
 ```cpp
-enum Piece { P=0, N=1, B=2, R=3, Q=4, K=5, p=6, n=7, b=8, r=9, q=10, k=11 };
+enum Color : uint8_t { WHITE = 0, BLACK = 1, COLOR_NONE = 2 };
+
+enum PieceType : uint8_t {
+    PT_NONE = 0, PT_PAWN = 1, PT_KNIGHT = 2,
+    PT_BISHOP = 3, PT_ROOK = 4, PT_QUEEN = 5, PT_KING = 6
+};
+
+enum Piece : uint8_t {
+    NO_PIECE = 0,
+    W_PAWN = 1, W_KNIGHT = 2, W_BISHOP = 3, W_ROOK = 4, W_QUEEN = 5, W_KING = 6,
+    B_PAWN = 9, B_KNIGHT = 10, B_BISHOP = 11, B_ROOK = 12, B_QUEEN = 13, B_KING = 14
+};
 ```
-- **Indices 0–5**: White pieces (`P`, `N`, `B`, `R`, `Q`, `K`).
-- **Indices 6–11**: Black pieces (`p`, `n`, `b`, `r`, `q`, `k`).
-- **Sentinel `0xF`** (decimal 15): Indicates an empty square.
-- **Side Test**: `piece < 6` evaluates to `true` for White, `false` for Black.
+- Piece encoding: `(color << 3) | piece_type`.
+- Color extraction: `piece >> 3`.
+- Type extraction: `piece & 7`.
 
-### 32-bit Move Bitfield Format (`uint32_t`)
-Moves are packed into a single 32-bit unsigned integer:
+### Compact 16-Bit Move Encoding (`struct Move`)
+Moves are packed into an ultra-compact 16-bit integer (`uint16_t`):
+```text
+Bits  0–5  : from square (0–63)
+Bits  6–11 : to square (0–63)
+Bits 12–13 : promotion piece type offset (0=Knight, 1=Bishop, 2=Rook, 3=Queen)
+Bits 14–15 : move flags:
+             00 = normal move / quiet
+             01 = promotion
+             10 = en passant
+             11 = castling
 ```
-Bits  0–5  : from_square (0–63)
-Bits  6–11 : to_square (0–63)
-Bits 12–15 : moving_piece (Piece enum 0–11)
-Bits 16–19 : captured_piece (0xF = no capture)
-Bits 20–23 : promotion_piece (0xF = no promotion)
-Bits 24–27 : castling_rights BEFORE this move (4-bit snapshot for unmake)
-Bit  28    : is_castle flag (1 = castling move)
-Bit  29    : is_en_passant flag (1 = en-passant capture)
-Bit  30    : is_double_push flag (1 = 2-square pawn jump)
-Bit  31    : side_to_move (0 = White, 1 = Black)
+Zero heap allocations. Move generation populates a contiguous stack array `MoveList` capable of holding up to 256 moves.
+
+---
+
+## 4. Bitboard Attack Calculation & PEXT Sliders (`bitboards.cpp`)
+
+TigerFish leverages modern x86-64 BMI2 hardware instructions:
+- **PEXT Sliders**: Bishop and Rook attacks use `_pext_u64(occupancy, mask)` to index directly into dense precomputed attack arrays with zero hash collisions.
+- **Fallback**: Automatically falls back to standard magic bitboard multiplier hashing if compiled on architectures without BMI2.
+- **Rays & Masks**: Precomputed lines (`LINE_BB[sq1][sq2]`), squares between (`BETWEEN_BB[sq1][sq2]`), knight attacks (`KNIGHT_ATTACKS[64]`), and king attacks (`KING_ATTACKS[64]`).
+
+---
+
+## 5. Board State & Stack-Linked History (`position.cpp`)
+
+### `Position` Struct (~140 Bytes)
+```cpp
+struct Position {
+    Bitboard pieces[16]{};      // Bitboards indexed by Piece enum
+    Bitboard colors[2]{};       // Combined occupancy per color
+    Piece mailbox[64]{};        // 0-63 square piece lookup
+    Square king_sq[2]{};        // Cached White and Black king squares
+    Color side_to_move = WHITE;
+    uint8_t castling_rights = 0;
+    int rule50 = 0;
+    int game_ply = 0;
+    StateInfo* state = nullptr; // Pointer to current stack frame
+};
 ```
 
-### En-Passant State (`Board::en_passant`)
-- Type: `uint8_t`.
-- **Value `255`**: No active en-passant target square.
-- **Value `0–63`**: The empty square behind a double-pushed pawn where an enemy pawn can capture.
+### Stack-Allocated `StateInfo`
+```cpp
+struct StateInfo {
+    uint64_t zobrist_key = 0;
+    Square en_passant_square = SQ_NONE;
+    Piece captured_piece = NO_PIECE;
+    uint8_t castling_rights = 0;
+    int rule50 = 0;
+    Bitboard checkers = 0;
+    Bitboard pinned = 0;
+    StateInfo* previous = nullptr;
+};
+```
+When `make_move(pos, move, state)` is called:
+1. The new `StateInfo` is allocated on the caller's execution stack frame.
+2. It links to `pos.state->previous = old_state`.
+3. `undo_move(pos, move)` restores the previous pointer with zero dynamic memory operations.
 
 ---
 
-## 4. File: `magic_lut.cpp` — Sliding Piece Magic Hash Tables
+## 6. Legal Move Generation & Bitboard Leaf Popcount (`movegen.cpp`)
 
-**Layer 1 — Precomputed attack bitboards for Rooks and Bishops.**
-
-### Key Structures & Global Lookup Arrays
-- `ROOK_ATTACKS[64][4096]` (`uint64_t`): Precomputed rook attack masks indexed by `[square][magic_hash]`. Size ~2 MB.
-- `BISHOP_ATTACKS[64][512]` (`uint64_t`): Precomputed bishop attack masks indexed by `[square][magic_hash]`. Size ~256 KB.
-- `ROOK_MAGICS[64]` / `BISHOP_MAGICS[64]`: Hardcoded 64-bit magic multiplication factors.
-- `ROOK_MASK[64]` / `BISHOP_MASK[64]`: Bitmasks of relevant blocker squares (board edges excluded).
-- `ROOK_SHIFT[64]` / `BISHOP_SHIFT[64]`: Right-shift constants equal to `64 - popcount(mask)`.
-
-### Function Workings & Implications
-- `init_rays()`: Walks all 8 compass directions (`NORTH`, `SOUTH`, `EAST`, `WEST`, `NE`, `SE`, `NW`, `SW`) from every square. Must be called once at startup.
-- `init_magics()`: Iterates through all blocker subsets via carry-ripple subtraction `(sub - 1) & mask`, computes attack bitboards, hashes them with the magic constant, and populates `ROOK_ATTACKS` / `BISHOP_ATTACKS`.
-- **Assumption**: Magic factors produce zero collisions across all valid occupancy subsets for each square.
+TigerFish generates **strictly legal moves** directly without post-move legality filters:
+1. Checks and Pins are precomputed via bitwise operations (`update_pins(pos)`).
+2. If in double-check, only king evasions are generated.
+3. If in single check, non-king moves must intercept the checker ray or capture the checker (`target_mask = squares_between(ksq, checker) | (1ULL << checker)`).
+4. Pinned pieces can only move along their pinning ray.
+5. **Hardware Leaf Popcount (`count_legal_moves`)**: At depth 1 of perft, move serialization to RAM is completely bypassed. Move counts are computed directly via `popcount(attacks & target_mask)`, achieving over **8.06 Billion NPS**.
 
 ---
 
-## 5. File: `eval_lut.cpp` — Static Evaluation Lookup Tables
+## 7. Lockless Cache-Aligned Transposition Table (`tt.cpp`)
 
-**Layer 1 — Piece-Square Tables (PST) and Piece Centipawn Values.**
+```cpp
+struct alignas(16) TTClusterEntry {
+    uint64_t key;  // Full 64-bit Zobrist key XOR'd with packed data
+    uint64_t data; // [move:16][score:16][eval:16][depth:8][meta:8]
+};
 
-### Table Arrays
-- `PIECE_VALUE[12]`: Base centipawn material values:
-  - Pawn: 100
-  - Knight: 320
-  - Bishop: 330
-  - Rook: 500
-  - Queen: 900
-  - King: 20000
-- `PAWN_PST[64]`, `KNIGHT_PST[64]`, `BISHOP_PST[64]`, `ROOK_PST[64]`, `QUEEN_PST[64]`, `KING_PST[64]`: Centipawn positional bonuses indexed by square 0–63 (from White's perspective).
-
-### Implication
-- Black piece scores mirror White's square using `Engine::mirror(sq) = (7 - rank) * 8 + file`.
+struct alignas(64) TTCluster {
+    TTClusterEntry entries[4]; // Exactly 64 bytes = 1 CPU cacheline
+};
+```
+- **Torn Read Prevention**: `key` is stored as `zobrist_key ^ data`. Upon probe, `(entry.key ^ entry.data) == zobrist_key` verifies consistency. If a multi-threaded writer modified the entry mid-probe, the XOR mismatch discards the entry automatically without mutex locking.
+- **Power-of-2 Indexing**: TT size is allocated as a power of 2, allowing single-cycle bitmask indexing (`key & (cluster_count - 1)`) without expensive integer division instructions.
 
 ---
 
-## 6. File: `board.cpp` — Board State, Zobrist Hashing, Make/Unmake
+## 8. Tapered Static Evaluation (`eval.cpp`)
 
-**Layer 2 — State container and incremental move application.**
-
-### Low-Level Bit Manipulation Primitives
-- **`lsb_index(uint64_t mask)`**: Uses `std::countr_zero(mask)` (compiles to x86-64 single-cycle `BSF` / `TZCNT` instructions). Returns index of the least significant set bit (0–63).
-- **`msb_index(uint64_t mask)`**: Uses `63 - std::countl_zero(mask)` (`BSR` / `LZCNT` on x86-64). Returns index of the most significant set bit.
-- **`pop_lsb(uint64_t& mask)`**: Extracts `lsb_index(mask)` and clears that bit in-place using Kernighan's trick `mask &= mask - 1`. Used for fast $O(K)$ iteration over set bits:
-  ```cpp
-  while (mask) {
-      int sq = pop_lsb(mask);
-      // Process square sq
-  }
-  ```
-
-### Bitwise File Guard Masks
-To prevent bit shifts from wrapping across opposite board edges (e.g. `a`-file shifting left to `h`-file):
-- `NOT_A_FILE` (`0xFEFEFEFEFEFEFEFEULL`): Clears File A.
-- `NOT_H_FILE` (`0x7F7F7F7F7F7F7F7FULL`): Clears File H.
-- `NOT_AB_FILE` (`0xFCFCFCFCFCFCFCFCULL`): Clears Files A and B (for knight -2 shifts).
-- `NOT_GH_FILE` (`0x3F3F3F3F3F3F3F3FULL`): Clears Files G and H (for knight +2 shifts).
-
-### `Board` Class Workings
-- `bitboards[12]` (`uint64_t`): 12 piece bitboards (P, N, B, R, Q, K, p, n, b, r, q, k).
-- `occupancy[3]` (`uint64_t`): `[0]` = White occupied, `[1]` = Black occupied, `[2]` = All occupied (`[0] | [1]`).
-- `piece_on[64]` (`Piece`): Mailbox array providing O(1) piece lookup for any square (sentinel `0xF` = empty).
-- `zobrist_hash` (`uint64_t`): 64-bit Zobrist key representing the exact position.
-- **`SplitMix64` Deterministic PRNG**: Seeding `1070372ULL` initializes `ZOBRIST_PIECE[12][64]`, `ZOBRIST_SIDE`, `ZOBRIST_CASTLING[16]`, and `ZOBRIST_EP[65]` deterministically on startup.
-- `make_move(uint32_t move)`:
-  1. Saves current castling rights, en-passant square, halfmove clock, and Zobrist key into history vectors (`move_history`, `ep_history`, `halfmove_history`, `zobrist_history`).
-  2. Updates piece bitboards, mailbox `piece_on`, and Zobrist key incrementally ($O(1)$ delta XOR operations).
-  3. Handles promotions, captures, en-passant pawn removal, and rook movement for castling.
-  4. Swaps `side_to_move` and updates `occupancy[]`.
-- `unmake_move()`:
-  1. Pops the last move from `move_history`, `ep_history`, `halfmove_history`, `zobrist_history`.
-  2. Reverses piece placements and restores castling rights, en-passant square, and side to move with zero Zobrist key drift.
+Static evaluation blends Middlegame (MG) and Endgame (EG) scores according to game phase ($0 \le \text{phase} \le 24$):
+- **Piece-Square Tables (PST)**: Tuned tapered values for all piece types across all 64 squares.
+- **Bishop Pair Bonus**: Awarded when a side maintains 2 or more active bishops.
+- **Pawn Structure**: Evaluates doubled pawns, isolated pawns, and passed pawns with rank-based bonus scaling.
+- **King Safety**: Evaluates pawn shield integrity in front of castled kings.
+- **Tempo Bonus**: +20 cp granted to the side with the initiative.
 
 ---
 
-## 7. File: `rules.cpp` — Legal Move Generator & Rule Verification
+## 9. Search Engine & Multiprocessor Parallelism (`search.cpp`)
 
-**Layer 3 — Legal move generation, pin detection, check verification.**
-
-### Key Workings & Tactical Generator States
-- `MoveList`: Stack-allocated container storing up to 218 moves (`uint32_t move_list[218]`, `int scores[218]`).
-- `find_pins(Board& board)`: Scans rays outward from the friendly king to detect pinned friendly pieces and store their allowable ray movement masks (`PinInfo`).
-- `ep_exposes_king(Board& board, int from_sq, int ep_sq)`: Verifies rare horizontal rank pin exposures when an en-passant capture removes two pawns from the same rank simultaneously.
-- **Legal Move Generation Flow** (`generate_moves`):
-  1. **Double Check ($\ge 2$ checkers)**: Only King moves are legal.
-  2. **Single Check ($1$ checker)**: Non-king moves must either capture the checker or block the check ray (`legal_mask`). King moves must move to non-attacked squares.
-  3. **Normal State ($0$ checkers)**: All legal moves are generated. `PinInfo` masks prevent pinned pieces from leaving their pin ray.
-- **MVV-LVA (Most Valuable Victim - Least Valuable Attacker) Scoring**:
-  $$\text{MVV-LVA Score} = (\text{Victim Value} \times 10) - \text{Attacker Value} + 10000$$
-  Calls `moves.sort_mvv_lva()` ($O(N)$ insertion sort) so all legal capture moves are presented to search in descending order of tactical value before quiet moves.
-- `get_game_result(Board& board)`:
-  - Evaluates terminal conditions: `GAME_CHECKMATE`, `GAME_STALEMATE`, `GAME_FIFTY_MOVE_DRAW` (100 halfmoves), `GAME_SEVENTY_FIVE_MOVE_DRAW` (150 halfmoves), `GAME_INSUFFICIENT_MATERIAL`.
+TigerFish 2.0 features modern tournament-grade search heuristics:
+1. **Principal Variation Search (PVS)**: Explores candidate moves with zero-window bounds (`[-alpha - 1, -alpha]`), re-searching only upon fail-high.
+2. **Reverse Futility Pruning (RFP)**: Evaluates static margin at depth $\le 8$ and cuts off branches where static score safely exceeds $\beta$.
+3. **Adaptive Null Move Pruning (NMP)**: Reduces search depth by $4 + \text{depth} / 4$ on null moves when pieces exist.
+4. **Logarithmic Late Move Reduction (LMR)**: Non-tactical moves searched late in the move order are reduced logarithmically using a precomputed 64x64 reduction matrix.
+5. **Dynamic Quiescence Delta Pruning**: Inspects remaining opponent material and pawn promotions to dynamically prune impossible tactical lines in quiescence search.
+6. **Depth-Threshold TT Probing**: Bypasses TT probing at leaf plies (`depth < 3 && !is_root`) to eliminate DRAM/cache thrashing.
+7. **Young Brothers Wait Concept (YBWC / Root Parallelism)**: Evaluates the oldest brother (PV move) sequentially on the main thread, then distributes remaining root moves across worker threads with zero-window scout searches.
+8. **Persistent `WorkerPool`**: Helper threads sleep on `std::condition_variable` between moves, completely eliminating Windows/Linux thread creation latency during matches.
 
 ---
 
-## 8. File: `search.cpp` — Minimax, Transposition Table (32 MB), & Evaluation
+## 10. High-Performance Parallel Perft Engine (`perft.h`)
 
-**Layer 4 — Search engine, evaluation function, and Transposition Table.**
-
-### 32 MB Transposition Table (`TranspositionTable`)
-- **Table Size**: `2,097,152` entries ($2^{21}$ entries $\times$ 16 bytes = **32 MB**).
-- **Masking**: `size_t index = key & (TABLE_SIZE - 1)` (instant O(1) bitwise AND index).
-- `TTEntry` Struct:
-  ```cpp
-  struct TTEntry {
-      uint64_t key = 0;        // 8 bytes: 64-bit Zobrist key
-      uint32_t best_move = 0;  // 4 bytes: Best move found at node
-      int16_t  eval = 0;       // 2 bytes: Evaluation score
-      int8_t   depth = -1;     // 1 byte : Search depth (-1 = empty)
-      TTFlag   flag = TT_EXACT;// 1 byte : Bound flag (TT_EXACT=0, TT_ALPHA=1, TT_BETA=2)
-  };
-  ```
-- **Bound Classifications**:
-  - `TT_EXACT` (0): Evaluation score was exact (trapped strictly between $\alpha$ and $\beta$).
-  - `TT_ALPHA` (1): Upper bound score ($\text{eval} \le \alpha$). Branch failed low.
-  - `TT_BETA` (2): Lower bound score ($\text{eval} \ge \beta$). Branch failed high (caused beta cutoff).
-- **Replacement Policy**: Depth-preferred replacement (`if (entry.key != key || depth >= entry.depth)`).
-
-### Search Workings & TT Move Ordering
-1. **TT Lookup**: On entering `minimax()`, `tt.lookup()` checks if the current Zobrist key exists in the table. If stored depth $\ge$ search depth and bound flags match (EXACT, ALPHA upper bound, BETA lower bound), the cached evaluation is returned immediately.
-2. **TT Move Ordering**: If a `tt_move` exists for the position, `minimax()` swaps it to position 0 in `MoveList` so the best move is searched first, maximizing alpha-beta pruning cutoffs.
-3. **Alpha-Beta Pruning**: Alpha and Beta bounds prune branches as soon as a refutation is found.
-4. **Mate & Draw Evaluations**: Checkmate evaluation scores $\pm (20000 + \text{depth})$ prioritizing faster mates. Draws evaluate to 0 centipawns.
-5. **Root Candidate Selection (`best_move`)**: Evaluates root moves at search depth, filters moves within a 50-centipawn threshold of the maximum score, and randomly selects among the top candidates for opening variety.
+- **Dynamic Work-Array Stealing**: Pre-generates tasks 2–3 plies deep into a flat array.
+- **Adaptive Task Chunking**: Workers claim batches of 16 down to 1 task dynamically, preventing atomic memory bus locking on 24+ core systems.
+- **Live Telemetry Stream (`--stream`)**: Displays real-time task progress, instantaneous NPS, overall NPS, elapsed time, and ETA.
+- **Split Perft (`--split`)**: Generates move-by-move node counts matching Stockfish perft division.
 
 ---
 
-## 9. File: `main.cpp` — CLI Engine Commands & Interactive Protocol
+## 11. CLI, UCI & Lichess Bot Bridge (`cli.cpp`, `uci.cpp`, `lichess_bot.py`)
 
-**Layer 5 — Executable entry point and IPC server mode.**
+### Command Dispatches
+- `./game.exe uci`: Standard Universal Chess Interface for Lichess bots, GUIs (Arena, Cutechess), and web backends.
+- `./game.exe interactive`: Lightweight line-oriented protocol (`newgame [fen]`, `apply <uci>`, `undo`, `best <depth>`, `quit`).
+- `./game.exe bench [depth] [threads] [--ybwc]`: Standardized 5-position benchmark.
+- `./game.exe perft [fen] [depth] [--threads N] [--split] [--tt] [--stream]`: Standalone Perft suite.
 
-### Available CLI Commands
-
-#### 1. `game.exe interactive` (Persistent Session — Used by Bots)
-Starts a persistent stdin/stdout session. One `game.exe` process runs for the entire duration of a game, preserving the **32 MB Transposition Table** across all turns.
-- **Protocol Commands**:
-  - `newgame [fen]` : Initializes board state (TT is **retained** to accumulate search knowledge). Returns `{"status": "ready"}`.
-  - `apply <uci_move>` : Applies opponent move to the internal board without searching. Returns `{"fen": "...", "status": "ongoing"}`.
-  - `best <depth>` : Searches current board to given depth, applies the best move internally, and returns `{"best_move": "uci", "fen": "...", "status": "ongoing"}`.
-  - `quit` / `exit` : Terminates the process cleanly.
-- **Sentinel**: Every JSON response is followed by `===READY===` on a new line.
-
-#### 2. `game.exe apply <fen> <uci_move>`
-Single-shot command to validate and apply a UCI move to a FEN, returning the resulting FEN without performing search.
-
-#### 3. `game.exe best <fen> [depth]`
-Single-shot command to search a position FEN at target depth (default 7) and return JSON `{"best_move": "..."}`.
-
-#### 4. `game.exe moves <fen>`
-Generates all legal moves for a FEN and prints full JSON state.
-
-#### 5. `game.exe play [depth]`
-Interactive terminal chess mode for human vs engine play.
+### Lichess Bot Bridge Architecture
+`lichess_bot.py` communicates with `game.exe` over asynchronous non-blocking pipes (`asyncio.create_subprocess_exec`). Time management dynamically computes move budgets based on clock remaining, increment, speed mode, and network lag buffer.
 
 ---
 
-## 10. Lichess Bot Bridge (`lichess_multibot.py` & `lichess_bot.py`)
+## 12. Performance Profile & Verification Matrix
 
-### Architecture
-- **`lichess_multibot.py`**: Multi-game bot farmer (handles up to 10 concurrent parallel games on Lichess).
-- **`lichess_bot.py`**: Single-game Lichess bot bridge.
-
-### Workings & Features
-- **Persistent Engine Process (`GameEngineProcess`)**: Each active Lichess game spawns its own `game.exe interactive` process. The 32 MB TT inside `game.exe` remains active for the full match.
-- **Non-blocking Event Loop (`asyncio` + `aiohttp`)**: Streams Lichess events and game states asynchronously without blocking incoming challenges or other active games.
-- **Dynamic Account Info**: Queries `/api/account` on startup to detect the bot's username dynamically.
-- **Auto-Seeker & Rejection Memory**:
-  - Automatically seeks matches against online bots across 11 time controls (bullet, blitz, rapid).
-  - Maintains `bot_blacklist` for bots rejecting bot-vs-bot games.
-  - Maintains `bot_tc_rejections` to avoid re-offering rejected time controls to specific bots.
-- **Graceful Shutdown**: Pressing `q` + Enter or sending `Ctrl+C` halts new challenges and allows all active games to finish cleanly before exiting.
-
----
-
-## 11. Performance Profile, Assumptions & Future Optimisation Roadmap
-
-### Current Performance Characteristics
-- **Move Generation**: Perft speed ~20–35 million nodes/sec (Mnps) on multi-threaded perft harness.
-- **Search Depth**: Comfortably searches Depth 7–8 in 1–3 seconds per move during blitz/rapid games.
-- **Memory Footprint**: 
-  - Engine binary: ~150 KB.
-  - RAM per active game process: ~34 MB (32 MB TT + stack/buffers).
-
-### Future Optimisation Roadmap
-1. **Quiescence Search**: Search captures at depth 0 until position resolves to eliminate horizon effects.
-2. **Iterative Deepening**: Search depth 1, 2, ..., N with time management allocation.
-3. **Incremental Evaluation**: Update centipawn material/PST score delta-style in `make_move`/`unmake_move` instead of 64-square full scans at leaf nodes.
-4. **History Heuristic & Killer Moves**: Track non-capture moves causing beta cutoffs to further boost move ordering.
+| Changed Module | Verification Command | Exit Criteria |
+| :--- | :--- | :--- |
+| **Movegen & Bitboards** | `.\game.exe perft bench` | 100% exact node count match across all 8 positions |
+| **Stockfish Parity** | `tools\perft\stockfish_perft_comparator.exe startpos 4` | 100% exact match on all 20 root moves |
+| **Search & Pruning** | `.\game.exe bench 12 4` | Completed with $>15\text{M NPS}$ and zero thread stalls |
+| **Bot Startup Preflight** | `python test_bot_startup.py` | All 5 clock scenarios PASS within budget |
+| **Regression Test Harness** | `python Test/regression/run_all_tests.py` | 87/87 tests PASS (baseline JSON saved) |

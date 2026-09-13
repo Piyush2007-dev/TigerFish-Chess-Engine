@@ -1,0 +1,1900 @@
+{
+  "engineVersion": "0.1",
+  "generatedAt": "2026-09-10T16:49:55Z",
+  "environment": {
+    "compiler": "g++.EXE (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r2) 16.1.0",
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.2",
+    "engineSettings": {
+      "threads": 1,
+      "hashMb": 32
+    }
+  },
+  "perft": {
+    "total": 6,
+    "passed": 6,
+    "results": [
+      {
+        "name": "Initial Position - Depth 5",
+        "depth": 5,
+        "expected": 4865609,
+        "actual": 4865609,
+        "time_ms": 88,
+        "passed": true
+      },
+      {
+        "name": "Kiwipete - Depth 4",
+        "depth": 4,
+        "expected": 4085603,
+        "actual": 4085603,
+        "time_ms": 70,
+        "passed": true
+      },
+      {
+        "name": "Position 3 - Depth 4",
+        "depth": 4,
+        "expected": 43238,
+        "actual": 43238,
+        "time_ms": 0,
+        "passed": true
+      },
+      {
+        "name": "Position 4 - Depth 4",
+        "depth": 4,
+        "expected": 422333,
+        "actual": 422333,
+        "time_ms": 7,
+        "passed": true
+      },
+      {
+        "name": "Position 5 - Depth 4",
+        "depth": 4,
+        "expected": 2103487,
+        "actual": 2103487,
+        "time_ms": 38,
+        "passed": true
+      },
+      {
+        "name": "Position 6 - Depth 4",
+        "depth": 4,
+        "expected": 3894594,
+        "actual": 3894594,
+        "time_ms": 65,
+        "passed": true
+      }
+    ]
+  },
+  "rules": {
+    "total": 8,
+    "passed": 8,
+    "results": [
+      {
+        "name": "initial legal moves",
+        "passed": true
+      },
+      {
+        "name": "checkmate",
+        "passed": true
+      },
+      {
+        "name": "stalemate",
+        "passed": true
+      },
+      {
+        "name": "en passant available",
+        "passed": true
+      },
+      {
+        "name": "promotion choices",
+        "passed": true
+      },
+      {
+        "name": "double check only king moves",
+        "passed": true
+      },
+      {
+        "name": "castling",
+        "passed": true
+      },
+      {
+        "name": "pinned piece",
+        "passed": true
+      }
+    ]
+  },
+  "evaluation": {
+    "total": 4,
+    "passed": 4,
+    "results": [
+      {
+        "name": "white up a queen",
+        "passed": true
+      },
+      {
+        "name": "black up a queen",
+        "passed": true
+      },
+      {
+        "name": "white extra pawn",
+        "passed": true
+      },
+      {
+        "name": "black extra pawn",
+        "passed": true
+      }
+    ]
+  },
+  "tactical": {
+    "positions": 3,
+    "solved": 3,
+    "accuracy": 1.0,
+    "results": [
+      {
+        "id": "mate_in_1_queen",
+        "name": "Queen Mate in 1",
+        "expected": "f3f7",
+        "actual": "f3f7",
+        "time_ms": 0,
+        "solved": true
+      },
+      {
+        "id": "mate_in_1_backrank",
+        "name": "Back Rank Mate in 1",
+        "expected": "b1b8",
+        "actual": "b1b8",
+        "time_ms": 0,
+        "solved": true
+      },
+      {
+        "id": "hanging_piece",
+        "name": "Hanging Rook Capture",
+        "expected": "d7d5",
+        "actual": "d7d5",
+        "time_ms": 0,
+        "solved": true
+      }
+    ]
+  },
+  "protocol": {
+    "uciHandshake": true,
+    "analysisCli": true,
+    "output": [
+      "id name TigerFish 2.0 (NewEngine)",
+      "id author TigerFish",
+      "option name Hash type spin default 64 min 1 max 1024",
+      "option name Threads type spin default 1 min 1 max 64",
+      "option name BookPath type string default \"\"",
+      "uciok",
+      "readyok",
+      "info depth 1 score cp 50 nodes 42 time 0 nps 42",
+      "bestmove b1c3"
+    ]
+  },
+  "suites": {
+    "tactical": [
+      {
+        "id": "tactic_000",
+        "name": "Queen Mate in 1 #1",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_001",
+        "name": "Back Rank Mate in 1 #1",
+        "fen": "6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1",
+        "expected_best_move": "b1b8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_002",
+        "name": "Knight Fork King & Rook #1",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/R1BQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_003",
+        "name": "Classic Queen Sacrifice Mate #1",
+        "fen": "r1b2rk1/pppp1ppp/8/4q3/8/5Q2/PPP2PPP/R3R1K1 w - - 0 1",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_004",
+        "name": "Hanging Rook Capture #1",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_005",
+        "name": "Discovered Attack #1",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_006",
+        "name": "Pin to the King #1",
+        "fen": "6k1/5ppp/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "expected_best_move": "f3f8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_007",
+        "name": "Skewer Tactic #1",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e6",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_008",
+        "name": "Double Check #1",
+        "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+        "expected_best_move": "e2e8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_009",
+        "name": "Pawn Break #1",
+        "fen": "8/8/8/8/8/8/4P3/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_010",
+        "name": "Clearance Sacrifice #1",
+        "fen": "r1b1k2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_011",
+        "name": "Smothered Mate #1",
+        "fen": "6k1/5ppp/8/8/8/8/7Q/6K1 w - - 0 1",
+        "expected_best_move": "h2h8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_012",
+        "name": "Queen Removal #1",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_013",
+        "name": "Deflection #1",
+        "fen": "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "e2e4",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_014",
+        "name": "Threading Move #1",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_015",
+        "name": "Intermediate Check #1",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_016",
+        "name": "Sacrifice #1",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_017",
+        "name": "Decoy #1",
+        "fen": "8/8/8/8/8/8/8/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_018",
+        "name": "Blunder Defense #1",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_019",
+        "name": "Three-Move Mate #1",
+        "fen": "7k/5ppp/8/8/8/8/8/6K1 w - - 0 1",
+        "expected_best_move": "g1h2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_020",
+        "name": "Queen Mate in 1 #2",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_021",
+        "name": "Back Rank Mate in 1 #2",
+        "fen": "6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1",
+        "expected_best_move": "b1b8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_022",
+        "name": "Knight Fork King & Rook #2",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/R1BQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_023",
+        "name": "Classic Queen Sacrifice Mate #2",
+        "fen": "r1b2rk1/pppp1ppp/8/4q3/8/5Q2/PPP2PPP/R3R1K1 w - - 0 1",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_024",
+        "name": "Hanging Rook Capture #2",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_025",
+        "name": "Discovered Attack #2",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_026",
+        "name": "Pin to the King #2",
+        "fen": "6k1/5ppp/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "expected_best_move": "f3f8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_027",
+        "name": "Skewer Tactic #2",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e6",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_028",
+        "name": "Double Check #2",
+        "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+        "expected_best_move": "e2e8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_029",
+        "name": "Pawn Break #2",
+        "fen": "8/8/8/8/8/8/4P3/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_030",
+        "name": "Clearance Sacrifice #2",
+        "fen": "r1b1k2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_031",
+        "name": "Smothered Mate #2",
+        "fen": "6k1/5ppp/8/8/8/8/7Q/6K1 w - - 0 1",
+        "expected_best_move": "h2h8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_032",
+        "name": "Queen Removal #2",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_033",
+        "name": "Deflection #2",
+        "fen": "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "e2e4",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_034",
+        "name": "Threading Move #2",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_035",
+        "name": "Intermediate Check #2",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_036",
+        "name": "Sacrifice #2",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_037",
+        "name": "Decoy #2",
+        "fen": "8/8/8/8/8/8/8/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_038",
+        "name": "Blunder Defense #2",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_039",
+        "name": "Three-Move Mate #2",
+        "fen": "7k/5ppp/8/8/8/8/8/6K1 w - - 0 1",
+        "expected_best_move": "g1h2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_040",
+        "name": "Queen Mate in 1 #3",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_041",
+        "name": "Back Rank Mate in 1 #3",
+        "fen": "6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1",
+        "expected_best_move": "b1b8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_042",
+        "name": "Knight Fork King & Rook #3",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/R1BQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_043",
+        "name": "Classic Queen Sacrifice Mate #3",
+        "fen": "r1b2rk1/pppp1ppp/8/4q3/8/5Q2/PPP2PPP/R3R1K1 w - - 0 1",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_044",
+        "name": "Hanging Rook Capture #3",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_045",
+        "name": "Discovered Attack #3",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_046",
+        "name": "Pin to the King #3",
+        "fen": "6k1/5ppp/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "expected_best_move": "f3f8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_047",
+        "name": "Skewer Tactic #3",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e6",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_048",
+        "name": "Double Check #3",
+        "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+        "expected_best_move": "e2e8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_049",
+        "name": "Pawn Break #3",
+        "fen": "8/8/8/8/8/8/4P3/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_050",
+        "name": "Clearance Sacrifice #3",
+        "fen": "r1b1k2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_051",
+        "name": "Smothered Mate #3",
+        "fen": "6k1/5ppp/8/8/8/8/7Q/6K1 w - - 0 1",
+        "expected_best_move": "h2h8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_052",
+        "name": "Queen Removal #3",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_053",
+        "name": "Deflection #3",
+        "fen": "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "e2e4",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_054",
+        "name": "Threading Move #3",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_055",
+        "name": "Intermediate Check #3",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_056",
+        "name": "Sacrifice #3",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_057",
+        "name": "Decoy #3",
+        "fen": "8/8/8/8/8/8/8/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_058",
+        "name": "Blunder Defense #3",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_059",
+        "name": "Three-Move Mate #3",
+        "fen": "7k/5ppp/8/8/8/8/8/6K1 w - - 0 1",
+        "expected_best_move": "g1h2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_060",
+        "name": "Queen Mate in 1 #4",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_061",
+        "name": "Back Rank Mate in 1 #4",
+        "fen": "6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1",
+        "expected_best_move": "b1b8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_062",
+        "name": "Knight Fork King & Rook #4",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/R1BQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_063",
+        "name": "Classic Queen Sacrifice Mate #4",
+        "fen": "r1b2rk1/pppp1ppp/8/4q3/8/5Q2/PPP2PPP/R3R1K1 w - - 0 1",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_064",
+        "name": "Hanging Rook Capture #4",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_065",
+        "name": "Discovered Attack #4",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_066",
+        "name": "Pin to the King #4",
+        "fen": "6k1/5ppp/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "expected_best_move": "f3f8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_067",
+        "name": "Skewer Tactic #4",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e6",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_068",
+        "name": "Double Check #4",
+        "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+        "expected_best_move": "e2e8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_069",
+        "name": "Pawn Break #4",
+        "fen": "8/8/8/8/8/8/4P3/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_070",
+        "name": "Clearance Sacrifice #4",
+        "fen": "r1b1k2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_071",
+        "name": "Smothered Mate #4",
+        "fen": "6k1/5ppp/8/8/8/8/7Q/6K1 w - - 0 1",
+        "expected_best_move": "h2h8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_072",
+        "name": "Queen Removal #4",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_073",
+        "name": "Deflection #4",
+        "fen": "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "e2e4",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_074",
+        "name": "Threading Move #4",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_075",
+        "name": "Intermediate Check #4",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_076",
+        "name": "Sacrifice #4",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_077",
+        "name": "Decoy #4",
+        "fen": "8/8/8/8/8/8/8/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_078",
+        "name": "Blunder Defense #4",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_079",
+        "name": "Three-Move Mate #4",
+        "fen": "7k/5ppp/8/8/8/8/8/6K1 w - - 0 1",
+        "expected_best_move": "g1h2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_080",
+        "name": "Queen Mate in 1 #5",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_081",
+        "name": "Back Rank Mate in 1 #5",
+        "fen": "6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1",
+        "expected_best_move": "b1b8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_082",
+        "name": "Knight Fork King & Rook #5",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/R1BQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_083",
+        "name": "Classic Queen Sacrifice Mate #5",
+        "fen": "r1b2rk1/pppp1ppp/8/4q3/8/5Q2/PPP2PPP/R3R1K1 w - - 0 1",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_084",
+        "name": "Hanging Rook Capture #5",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_085",
+        "name": "Discovered Attack #5",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_086",
+        "name": "Pin to the King #5",
+        "fen": "6k1/5ppp/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "expected_best_move": "f3f8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_087",
+        "name": "Skewer Tactic #5",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e6",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_088",
+        "name": "Double Check #5",
+        "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+        "expected_best_move": "e2e8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_089",
+        "name": "Pawn Break #5",
+        "fen": "8/8/8/8/8/8/4P3/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_090",
+        "name": "Clearance Sacrifice #5",
+        "fen": "r1b1k2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_091",
+        "name": "Smothered Mate #5",
+        "fen": "6k1/5ppp/8/8/8/8/7Q/6K1 w - - 0 1",
+        "expected_best_move": "h2h8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_092",
+        "name": "Queen Removal #5",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_093",
+        "name": "Deflection #5",
+        "fen": "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "e2e4",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_094",
+        "name": "Threading Move #5",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_095",
+        "name": "Intermediate Check #5",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_096",
+        "name": "Sacrifice #5",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_097",
+        "name": "Decoy #5",
+        "fen": "8/8/8/8/8/8/8/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_098",
+        "name": "Blunder Defense #5",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_099",
+        "name": "Three-Move Mate #5",
+        "fen": "7k/5ppp/8/8/8/8/8/6K1 w - - 0 1",
+        "expected_best_move": "g1h2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_100",
+        "name": "Queen Mate in 1 #6",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_101",
+        "name": "Back Rank Mate in 1 #6",
+        "fen": "6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1",
+        "expected_best_move": "b1b8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_102",
+        "name": "Knight Fork King & Rook #6",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/R1BQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_103",
+        "name": "Classic Queen Sacrifice Mate #6",
+        "fen": "r1b2rk1/pppp1ppp/8/4q3/8/5Q2/PPP2PPP/R3R1K1 w - - 0 1",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_104",
+        "name": "Hanging Rook Capture #6",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_105",
+        "name": "Discovered Attack #6",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_106",
+        "name": "Pin to the King #6",
+        "fen": "6k1/5ppp/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "expected_best_move": "f3f8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_107",
+        "name": "Skewer Tactic #6",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e6",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_108",
+        "name": "Double Check #6",
+        "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+        "expected_best_move": "e2e8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_109",
+        "name": "Pawn Break #6",
+        "fen": "8/8/8/8/8/8/4P3/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_110",
+        "name": "Clearance Sacrifice #6",
+        "fen": "r1b1k2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_111",
+        "name": "Smothered Mate #6",
+        "fen": "6k1/5ppp/8/8/8/8/7Q/6K1 w - - 0 1",
+        "expected_best_move": "h2h8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_112",
+        "name": "Queen Removal #6",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_113",
+        "name": "Deflection #6",
+        "fen": "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "e2e4",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_114",
+        "name": "Threading Move #6",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_115",
+        "name": "Intermediate Check #6",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_116",
+        "name": "Sacrifice #6",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_117",
+        "name": "Decoy #6",
+        "fen": "8/8/8/8/8/8/8/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_118",
+        "name": "Blunder Defense #6",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_119",
+        "name": "Three-Move Mate #6",
+        "fen": "7k/5ppp/8/8/8/8/8/6K1 w - - 0 1",
+        "expected_best_move": "g1h2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_120",
+        "name": "Queen Mate in 1 #7",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_121",
+        "name": "Back Rank Mate in 1 #7",
+        "fen": "6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1",
+        "expected_best_move": "b1b8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_122",
+        "name": "Knight Fork King & Rook #7",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/R1BQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_123",
+        "name": "Classic Queen Sacrifice Mate #7",
+        "fen": "r1b2rk1/pppp1ppp/8/4q3/8/5Q2/PPP2PPP/R3R1K1 w - - 0 1",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_124",
+        "name": "Hanging Rook Capture #7",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_125",
+        "name": "Discovered Attack #7",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_126",
+        "name": "Pin to the King #7",
+        "fen": "6k1/5ppp/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "expected_best_move": "f3f8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_127",
+        "name": "Skewer Tactic #7",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e6",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_128",
+        "name": "Double Check #7",
+        "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+        "expected_best_move": "e2e8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_129",
+        "name": "Pawn Break #7",
+        "fen": "8/8/8/8/8/8/4P3/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_130",
+        "name": "Clearance Sacrifice #7",
+        "fen": "r1b1k2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_131",
+        "name": "Smothered Mate #7",
+        "fen": "6k1/5ppp/8/8/8/8/7Q/6K1 w - - 0 1",
+        "expected_best_move": "h2h8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_132",
+        "name": "Queen Removal #7",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_133",
+        "name": "Deflection #7",
+        "fen": "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "e2e4",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_134",
+        "name": "Threading Move #7",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_135",
+        "name": "Intermediate Check #7",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_136",
+        "name": "Sacrifice #7",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_137",
+        "name": "Decoy #7",
+        "fen": "8/8/8/8/8/8/8/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_138",
+        "name": "Blunder Defense #7",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_139",
+        "name": "Three-Move Mate #7",
+        "fen": "7k/5ppp/8/8/8/8/8/6K1 w - - 0 1",
+        "expected_best_move": "g1h2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_140",
+        "name": "Queen Mate in 1 #8",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_141",
+        "name": "Back Rank Mate in 1 #8",
+        "fen": "6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1",
+        "expected_best_move": "b1b8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_142",
+        "name": "Knight Fork King & Rook #8",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/R1BQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_143",
+        "name": "Classic Queen Sacrifice Mate #8",
+        "fen": "r1b2rk1/pppp1ppp/8/4q3/8/5Q2/PPP2PPP/R3R1K1 w - - 0 1",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_144",
+        "name": "Hanging Rook Capture #8",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_145",
+        "name": "Discovered Attack #8",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_146",
+        "name": "Pin to the King #8",
+        "fen": "6k1/5ppp/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "expected_best_move": "f3f8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_147",
+        "name": "Skewer Tactic #8",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e6",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_148",
+        "name": "Double Check #8",
+        "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+        "expected_best_move": "e2e8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_149",
+        "name": "Pawn Break #8",
+        "fen": "8/8/8/8/8/8/4P3/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_150",
+        "name": "Clearance Sacrifice #8",
+        "fen": "r1b1k2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_151",
+        "name": "Smothered Mate #8",
+        "fen": "6k1/5ppp/8/8/8/8/7Q/6K1 w - - 0 1",
+        "expected_best_move": "h2h8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_152",
+        "name": "Queen Removal #8",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_153",
+        "name": "Deflection #8",
+        "fen": "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "e2e4",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_154",
+        "name": "Threading Move #8",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_155",
+        "name": "Intermediate Check #8",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_156",
+        "name": "Sacrifice #8",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_157",
+        "name": "Decoy #8",
+        "fen": "8/8/8/8/8/8/8/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_158",
+        "name": "Blunder Defense #8",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_159",
+        "name": "Three-Move Mate #8",
+        "fen": "7k/5ppp/8/8/8/8/8/6K1 w - - 0 1",
+        "expected_best_move": "g1h2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_160",
+        "name": "Queen Mate in 1 #9",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_161",
+        "name": "Back Rank Mate in 1 #9",
+        "fen": "6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1",
+        "expected_best_move": "b1b8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_162",
+        "name": "Knight Fork King & Rook #9",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/R1BQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_163",
+        "name": "Classic Queen Sacrifice Mate #9",
+        "fen": "r1b2rk1/pppp1ppp/8/4q3/8/5Q2/PPP2PPP/R3R1K1 w - - 0 1",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_164",
+        "name": "Hanging Rook Capture #9",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_165",
+        "name": "Discovered Attack #9",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_166",
+        "name": "Pin to the King #9",
+        "fen": "6k1/5ppp/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "expected_best_move": "f3f8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_167",
+        "name": "Skewer Tactic #9",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e6",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_168",
+        "name": "Double Check #9",
+        "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+        "expected_best_move": "e2e8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_169",
+        "name": "Pawn Break #9",
+        "fen": "8/8/8/8/8/8/4P3/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_170",
+        "name": "Clearance Sacrifice #9",
+        "fen": "r1b1k2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_171",
+        "name": "Smothered Mate #9",
+        "fen": "6k1/5ppp/8/8/8/8/7Q/6K1 w - - 0 1",
+        "expected_best_move": "h2h8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_172",
+        "name": "Queen Removal #9",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_173",
+        "name": "Deflection #9",
+        "fen": "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "e2e4",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_174",
+        "name": "Threading Move #9",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_175",
+        "name": "Intermediate Check #9",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_176",
+        "name": "Sacrifice #9",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_177",
+        "name": "Decoy #9",
+        "fen": "8/8/8/8/8/8/8/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_178",
+        "name": "Blunder Defense #9",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_179",
+        "name": "Three-Move Mate #9",
+        "fen": "7k/5ppp/8/8/8/8/8/6K1 w - - 0 1",
+        "expected_best_move": "g1h2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_180",
+        "name": "Queen Mate in 1 #10",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_181",
+        "name": "Back Rank Mate in 1 #10",
+        "fen": "6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1",
+        "expected_best_move": "b1b8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_182",
+        "name": "Knight Fork King & Rook #10",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/R1BQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_183",
+        "name": "Classic Queen Sacrifice Mate #10",
+        "fen": "r1b2rk1/pppp1ppp/8/4q3/8/5Q2/PPP2PPP/R3R1K1 w - - 0 1",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_184",
+        "name": "Hanging Rook Capture #10",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_185",
+        "name": "Discovered Attack #10",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_186",
+        "name": "Pin to the King #10",
+        "fen": "6k1/5ppp/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "expected_best_move": "f3f8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_187",
+        "name": "Skewer Tactic #10",
+        "fen": "r1bqk2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e6",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_188",
+        "name": "Double Check #10",
+        "fen": "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1",
+        "expected_best_move": "e2e8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_189",
+        "name": "Pawn Break #10",
+        "fen": "8/8/8/8/8/8/4P3/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_190",
+        "name": "Clearance Sacrifice #10",
+        "fen": "r1b1k2r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "e1e5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_191",
+        "name": "Smothered Mate #10",
+        "fen": "6k1/5ppp/8/8/8/8/7Q/6K1 w - - 0 1",
+        "expected_best_move": "h2h8",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_192",
+        "name": "Queen Removal #10",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "expected_best_move": "c4e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_193",
+        "name": "Deflection #10",
+        "fen": "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "e2e4",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_194",
+        "name": "Threading Move #10",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_195",
+        "name": "Intermediate Check #10",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_196",
+        "name": "Sacrifice #10",
+        "fen": "r1bq1rk1/pppp1ppp/2n5/4p3/4R3/5N2/PPPP1PPP/R1BQ2K1 b - - 0 1",
+        "expected_best_move": "d7d5",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_197",
+        "name": "Decoy #10",
+        "fen": "8/8/8/8/8/8/8/4K3 w - - 0 1",
+        "expected_best_move": "e1e2",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_198",
+        "name": "Blunder Defense #10",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1n3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
+        "expected_best_move": "f3f7",
+        "category": "tactics"
+      },
+      {
+        "id": "tactic_199",
+        "name": "Three-Move Mate #10",
+        "fen": "7k/5ppp/8/8/8/8/8/6K1 w - - 0 1",
+        "expected_best_move": "g1h2",
+        "category": "tactics"
+      }
+    ],
+    "positional": [
+      {
+        "id": "opening_central_control",
+        "name": "Central Control",
+        "fen": "r1bqkb1r/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4",
+        "expected_best_move": "f3e5",
+        "category": "positional"
+      },
+      {
+        "id": "develop_knights",
+        "name": "Knight Development",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "expected_best_move": "g1f3",
+        "category": "opening"
+      }
+    ],
+    "endgame": [
+      {
+        "id": "k_vs_p_promotion",
+        "name": "King and Pawn vs King",
+        "fen": "8/8/8/8/8/8/4K3/3k4 w - - 0 1",
+        "expected_best_move": "e2d3",
+        "category": "endgame"
+      },
+      {
+        "id": "rook_endgame_simple",
+        "name": "Rook Endgame",
+        "fen": "8/8/8/8/8/8/5k2/R1K5 w - - 0 1",
+        "expected_best_move": "a1a2",
+        "category": "endgame"
+      }
+    ]
+  },
+  "performance": {
+    "position": "initial",
+    "depth": 5,
+    "nodes": 1235,
+    "timeMs": 0,
+    "nps": 1235
+  },
+  "eval_advanced": {
+    "total": 17,
+    "passed": 17,
+    "results": [
+      {
+        "name": "  endgame score positive for White advantage",
+        "passed": true
+      },
+      {
+        "name": "  middlegame score in reasonable range",
+        "passed": true
+      },
+      {
+        "name": "  endgame score in reasonable range",
+        "passed": true
+      },
+      {
+        "name": "  bishop pair scores higher than B+N",
+        "passed": true
+      },
+      {
+        "name": "  clean pawns >= doubled pawns",
+        "passed": true
+      },
+      {
+        "name": "  supported pawns >= isolated pawns",
+        "passed": true
+      },
+      {
+        "name": "  passed pawn > blocked pawn",
+        "passed": true
+      },
+      {
+        "name": "  rank 6 passer > rank 5 passer",
+        "passed": true
+      },
+      {
+        "name": "  central bishop > corner bishop",
+        "passed": true
+      },
+      {
+        "name": "  shielded king > exposed king",
+        "passed": true
+      },
+      {
+        "name": "  white advantage is positive",
+        "passed": true
+      },
+      {
+        "name": "  black advantage is negative",
+        "passed": true
+      },
+      {
+        "name": "  symmetric magnitudes (within 20%)",
+        "passed": true
+      },
+      {
+        "name": "  startpos score near zero",
+        "passed": true
+      },
+      {
+        "name": "  extra knight is positive advantage",
+        "passed": true
+      },
+      {
+        "name": "  Black extra knight is negative for White",
+        "passed": true
+      },
+      {
+        "name": "  central king > corner king in endgame",
+        "passed": true
+      }
+    ]
+  },
+  "rules_advanced": {
+    "total": 25,
+    "passed": 25,
+    "results": [
+      {
+        "name": "  K vs K",
+        "passed": true
+      },
+      {
+        "name": "  K+B vs K",
+        "passed": true
+      },
+      {
+        "name": "  K+N vs K",
+        "passed": true
+      },
+      {
+        "name": "  EP capture available (d5c6)",
+        "passed": true
+      },
+      {
+        "name": "  kingside castling available from start",
+        "passed": true
+      },
+      {
+        "name": "  queenside castling available from start",
+        "passed": true
+      },
+      {
+        "name": "  correct number of castling moves (2)",
+        "passed": true
+      },
+      {
+        "name": "  castling requires king on home square",
+        "passed": true
+      },
+      {
+        "name": "  en passant requires captured pawn",
+        "passed": true
+      },
+      {
+        "name": "  pawns cannot occupy back rank",
+        "passed": true
+      },
+      {
+        "name": "  checkmate takes precedence over fifty-move draw",
+        "passed": true
+      },
+      {
+        "name": "  bishop has moves off e-file for discovered check",
+        "passed": true
+      },
+      {
+        "name": "  queen promotion available",
+        "passed": true
+      },
+      {
+        "name": "  rook promotion available",
+        "passed": true
+      },
+      {
+        "name": "  bishop promotion available",
+        "passed": true
+      },
+      {
+        "name": "  knight promotion available",
+        "passed": true
+      },
+      {
+        "name": "  stalemate detected (Ka8 trapped by Kb6+Qc7)",
+        "passed": true
+      },
+      {
+        "name": "  all make/unmake round-trips correct",
+        "passed": true
+      },
+      {
+        "name": "  scholar's mate: White checkmated",
+        "passed": true
+      },
+      {
+        "name": "  kingside castle identified correctly",
+        "passed": true
+      },
+      {
+        "name": "  queenside castle identified correctly",
+        "passed": true
+      },
+      {
+        "name": "  checkmate result",
+        "passed": true
+      },
+      {
+        "name": "  stalemate result",
+        "passed": true
+      },
+      {
+        "name": "  insufficient material result",
+        "passed": true
+      },
+      {
+        "name": "  ongoing game result",
+        "passed": true
+      }
+    ]
+  },
+  "search_advanced": {
+    "total": 19,
+    "passed": 19,
+    "results": [
+      {
+        "name": "  scholar's mate (f3f7#)",
+        "passed": true
+      },
+      {
+        "name": "  back rank mate (b1b8#)",
+        "passed": true
+      },
+      {
+        "name": "  finds hanging piece capture",
+        "passed": true
+      },
+      {
+        "name": "  develops knight or finds tactic",
+        "passed": true
+      },
+      {
+        "name": "  endgame K+P vs K finds a move",
+        "passed": true
+      },
+      {
+        "name": "  pawn promotion available",
+        "passed": true
+      },
+      {
+        "name": "  same position gives same move",
+        "passed": true
+      },
+      {
+        "name": "  same position gives similar node count",
+        "passed": true
+      },
+      {
+        "name": "  TT search uses fewer nodes",
+        "passed": true
+      },
+      {
+        "name": "  depth 8 completes",
+        "passed": true
+      },
+      {
+        "name": "  depth 8 under 10 seconds",
+        "passed": true
+      },
+      {
+        "name": "  reasonable node count for depth 8",
+        "passed": true
+      },
+      {
+        "name": "  zugzwang position finds a move",
+        "passed": true
+      },
+      {
+        "name": "  quiet position search completes",
+        "passed": true
+      },
+      {
+        "name": "  Queen mate in 1",
+        "passed": true
+      },
+      {
+        "name": "  Back rank mate in 1",
+        "passed": true
+      },
+      {
+        "name": "  NPS > 500K",
+        "passed": true
+      },
+      {
+        "name": "  NPS < 5M (not suspiciously fast = pruning working)",
+        "passed": true
+      },
+      {
+        "name": "  search completes under 5 seconds",
+        "passed": true
+      }
+    ]
+  },
+  "failures": {
+    "perftExitCode": 0,
+    "rulesExitCode": 0,
+    "evaluationExitCode": 0,
+    "tacticsExitCode": 0,
+    "evalAdvancedExitCode": 0,
+    "rulesAdvancedExitCode": 0,
+    "searchAdvancedExitCode": 0,
+    "analysisExitCode": 0,
+    "stderr": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  },
+  "exitCode": 0
+}

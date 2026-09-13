@@ -1,521 +1,329 @@
 #pragma once
-// ═══════════════════════════════════════════════════════════════════
-// EVALUATION PIPELINE — engine/eval.cpp
-// Replaces eval_lut.cpp. Single public function: int evaluate(Board&)
-//
-// Features (in evaluation order):
-//   1. Tapered eval — MG/EG PSTs blended by game phase
-//   2. Bishop pair bonus
-//   3. Pawn structure — doubled, isolated, passed pawns
-//   4. Mobility — count safe squares per piece type
-//   5. King safety — pawn shield + attacker count (MG only)
-// ═══════════════════════════════════════════════════════════════════
-#include "rules.cpp"
-// ── Constants ───────────────────────────────────────────────────
-static const int MAX_PHASE = 24;
+// ══════════════════════════════════════════════════════════════════════════════
+// TIGERFISH NEWENGINE — EVALUATION (newengine/eval.cpp)
+// Tapered Handcrafted Evaluation with O(1) Incremental Base & Pluggable RL Hook.
+// ══════════════════════════════════════════════════════════════════════════════
 
-// Piece values (index: 0-5 white P N B R Q K, 6-11 black p n b r q k)
-static inline constexpr int PIECE_VALUE[12] = {
-    100, 320, 330, 500, 900, 20000,
-    100, 320, 330, 500, 900, 20000
+#include "types.cpp"
+#include "bitboards.cpp"
+#include "position.cpp"
+
+namespace tigerfish {
+
+// ── Evaluation Bonus & Penalty Constants ─────────────────────────────────────
+constexpr int BISHOP_PAIR_BONUS_MG = 35;
+constexpr int BISHOP_PAIR_BONUS_EG = 50;
+
+constexpr int DOUBLED_PAWN_PENALTY_MG = 15;
+constexpr int DOUBLED_PAWN_PENALTY_EG = 25;
+
+constexpr int ISOLATED_PAWN_PENALTY_MG = 15;
+constexpr int ISOLATED_PAWN_PENALTY_EG = 20;
+
+constexpr int PASSED_PAWN_BONUS_MG[8] = { 0, 5, 10, 20, 35, 60, 100, 0 };
+constexpr int PASSED_PAWN_BONUS_EG[8] = { 0, 10, 20, 35, 60, 100, 160, 0 };
+
+constexpr int ROOK_OPEN_FILE_MG = 25;
+constexpr int ROOK_OPEN_FILE_EG = 15;
+constexpr int ROOK_SEMI_OPEN_FILE_MG = 12;
+constexpr int ROOK_SEMI_OPEN_FILE_EG = 8;
+
+// ── Pluggable Model Hook (for Reinforcement Learning / NNUE) ─────────────────
+using EvalHookFunc = int (*)(const Position&);
+inline EvalHookFunc ACTIVE_EVAL_HOOK = nullptr;
+
+static Bitboard WHITE_PASSED_SPAN[64]{};
+static Bitboard BLACK_PASSED_SPAN[64]{};
+static Bitboard ADJACENT_FILES[8]{};
+
+struct alignas(16) PawnEntry {
+    uint64_t key{0};
+    int16_t mg{0};
+    int16_t eg{0};
 };
+static PawnEntry PAWN_TABLE[65536]{};
 
-// Phase weights per piece type (pawn=0, knight=1, bishop=1, rook=2, queen=4)
-static inline constexpr int PHASE_WEIGHT[12] = {
-    0, 1, 1, 2, 4, 0,  // White P N B R Q K
-    0, 1, 1, 2, 4, 0   // Black p n b r q k
-};
+// ── Pawn Structure Evaluation ────────────────────────────────────────────────
+inline void eval_pawns(const Position& pos, int& mg, int& eg) noexcept {
+    uint64_t key = pos.state->pawn_zobrist_key;
+    uint32_t idx = static_cast<uint32_t>(key & 65535);
+    if (PAWN_TABLE[idx].key == key) {
+        std::atomic_thread_fence(std::memory_order_acquire);
+        mg += PAWN_TABLE[idx].mg;
+        eg += PAWN_TABLE[idx].eg;
+        return;
+    }
 
-// ── File Masks ──────────────────────────────────────────────────
-static inline constexpr uint64_t FILE_A_BB = 0x0101010101010101ULL;
-static inline constexpr uint64_t FILE_B_BB = 0x0202020202020202ULL;
-static inline constexpr uint64_t FILE_G_BB = 0x4040404040404040ULL;
-static inline constexpr uint64_t FILE_H_BB = 0x8080808080808080ULL;
-static inline constexpr uint64_t ADJ_FILES[8] = {
-    FILE_B_BB,                         // File A neighbors: B
-    FILE_A_BB | FILE_B_BB,             // File B neighbors: A,C (but C isn't in mask, just A|B)
-    FILE_A_BB | FILE_B_BB,             // File C neighbors: B,D
-    FILE_B_BB,                         // File D neighbors: C,E
-    FILE_G_BB,                         // File E neighbors: D,F
-    FILE_G_BB | FILE_H_BB,             // File F neighbors: E,G
-    FILE_G_BB | FILE_H_BB,             // File G neighbors: F,H
-    FILE_G_BB                          // File H neighbors: G
-};
+    int p_mg = 0;
+    int p_eg = 0;
+    Bitboard w_pawns = pos.pieces[W_PAWN];
+    Bitboard b_pawns = pos.pieces[B_PAWN];
 
-// Simpler adjacent file mask: shift left/right
-static inline uint64_t adjacent_files(uint64_t pawns) {
-    return ((pawns & ~FILE_A_BB) >> 1) | ((pawns & ~FILE_H_BB) << 1);
+    // File-by-file analysis
+    for (int f = 0; f < 8; ++f) {
+        Bitboard file_mask = FILE_MASKS[f];
+        Bitboard adj_mask = ADJACENT_FILES[f];
+
+        // White pawns on file
+        Bitboard wp_file = w_pawns & file_mask;
+        int wp_count = popcount(wp_file);
+        if (wp_count > 1) {
+            p_mg -= (wp_count - 1) * DOUBLED_PAWN_PENALTY_MG;
+            p_eg -= (wp_count - 1) * DOUBLED_PAWN_PENALTY_EG;
+        }
+        if (wp_count > 0 && !(w_pawns & adj_mask)) {
+            p_mg -= ISOLATED_PAWN_PENALTY_MG;
+            p_eg -= ISOLATED_PAWN_PENALTY_EG;
+        }
+
+        // Black pawns on file
+        Bitboard bp_file = b_pawns & file_mask;
+        int bp_count = popcount(bp_file);
+        if (bp_count > 1) {
+            p_mg += (bp_count - 1) * DOUBLED_PAWN_PENALTY_MG;
+            p_eg += (bp_count - 1) * DOUBLED_PAWN_PENALTY_EG;
+        }
+        if (bp_count > 0 && !(b_pawns & adj_mask)) {
+            p_mg += ISOLATED_PAWN_PENALTY_MG;
+            p_eg -= ISOLATED_PAWN_PENALTY_EG;
+        }
+    }
+
+    // Passed pawns
+    Bitboard wp_copy = w_pawns;
+    while (wp_copy) {
+        Square sq = pop_lsb(wp_copy);
+        if (!(b_pawns & WHITE_PASSED_SPAN[sq])) {
+            int r = square_rank(sq);
+            p_mg += PASSED_PAWN_BONUS_MG[r];
+            p_eg += PASSED_PAWN_BONUS_EG[r];
+        }
+    }
+
+    Bitboard bp_copy = b_pawns;
+    while (bp_copy) {
+        Square sq = pop_lsb(bp_copy);
+        if (!(w_pawns & BLACK_PASSED_SPAN[sq])) {
+            int rank_from_black = 7 - square_rank(sq);
+            p_mg -= PASSED_PAWN_BONUS_MG[rank_from_black];
+            p_eg -= PASSED_PAWN_BONUS_EG[rank_from_black];
+        }
+    }
+
+    PAWN_TABLE[idx].mg = static_cast<int16_t>(p_mg);
+    PAWN_TABLE[idx].eg = static_cast<int16_t>(p_eg);
+    std::atomic_thread_fence(std::memory_order_release);
+    PAWN_TABLE[idx].key = key;
+    mg += p_mg;
+    eg += p_eg;
 }
 
-// PST tables (PAWN_PST_MG, etc., and MG_PST/EG_PST) are defined in pst_tables.h
 
+// ── Mobility & Pieces Evaluation ─────────────────────────────────────────────
+inline void eval_pieces(const Position& pos, int& mg, int& eg) noexcept {
+    Bitboard w_pawns = pos.pieces[W_PAWN];
+    Bitboard b_pawns = pos.pieces[B_PAWN];
 
-// ═══════════════════════════════════════════════════════════════════
-// 2. BISHOP PAIR BONUS
-// ═══════════════════════════════════════════════════════════════════
+    // Bishop pair
+    if (popcount(pos.pieces[W_BISHOP]) >= 2) {
+        mg += BISHOP_PAIR_BONUS_MG;
+        eg += BISHOP_PAIR_BONUS_EG;
+    }
+    if (popcount(pos.pieces[B_BISHOP]) >= 2) {
+        mg -= BISHOP_PAIR_BONUS_MG;
+        eg -= BISHOP_PAIR_BONUS_EG;
+    }
 
-static inline constexpr int BISHOP_PAIR_MG = 40;
-static inline constexpr int BISHOP_PAIR_EG = 50;
+    // Rook on open and semi-open files
+    Bitboard w_rooks = pos.pieces[W_ROOK];
+    while (w_rooks) {
+        Square sq = pop_lsb(w_rooks);
+        File f = square_file(sq);
+        if (!(w_pawns & FILE_MASKS[f])) {
+            if (!(b_pawns & FILE_MASKS[f])) {
+                mg += ROOK_OPEN_FILE_MG;
+                eg += ROOK_OPEN_FILE_EG;
+            } else {
+                mg += ROOK_SEMI_OPEN_FILE_MG;
+                eg += ROOK_SEMI_OPEN_FILE_EG;
+            }
+        }
+    }
 
-// ═══════════════════════════════════════════════════════════════════
-// 3. PAWN STRUCTURE
-// ═══════════════════════════════════════════════════════════════════
+    Bitboard b_rooks = pos.pieces[B_ROOK];
+    while (b_rooks) {
+        Square sq = pop_lsb(b_rooks);
+        File f = square_file(sq);
+        if (!(b_pawns & FILE_MASKS[f])) {
+            if (!(w_pawns & FILE_MASKS[f])) {
+                mg -= ROOK_OPEN_FILE_MG;
+                eg -= ROOK_OPEN_FILE_EG;
+            } else {
+                mg -= ROOK_SEMI_OPEN_FILE_MG;
+                eg -= ROOK_SEMI_OPEN_FILE_EG;
+            }
+        }
+    }
+}
 
-// Doubled pawn penalty (per doubled pawn beyond first)
-static inline constexpr int DOUBLED_PAWN_PENALTY = -12;
+// ── King Safety Evaluation (Middlegame Only) ─────────────────────────────────
+static Bitboard KING_SHIELD_1[2][64]{};
+static Bitboard KING_SHIELD_2[2][64]{};
 
-// Isolated pawn penalty
-static inline constexpr int ISOLATED_PAWN_PENALTY = -15;
+inline void init_king_shields() noexcept {
+    static bool init = false;
+    if (init) return;
+    init = true;
 
-// Passed pawn bonus by rank (index 0=r2 for white, 6=r7 for white)
-// Scaled higher for endgame in the taper
-static inline constexpr int PASSED_PAWN_MG[8] = { 0, 0, 0, 8, 15, 25, 40, 0 };
-static inline constexpr int PASSED_PAWN_EG[8] = { 0, 0, 0, 15, 30, 55, 90, 0 };
+    for (int f = 0; f < 8; ++f) {
+        ADJACENT_FILES[f] = (f > 0 ? FILE_MASKS[f - 1] : 0) | (f < 7 ? FILE_MASKS[f + 1] : 0);
+    }
 
-// Connected passed pawn bonus
-static inline constexpr int CONNECTED_PASSED_BONUS = 12;
+    for (int sq = 0; sq < 64; ++sq) {
+        int r = square_rank(static_cast<Square>(sq));
+        int f = square_file(static_cast<Square>(sq));
 
-// ═══════════════════════════════════════════════════════════════════
-// 4. MOBILITY
-// ═══════════════════════════════════════════════════════════════════
+        Bitboard front_w = (r < 7) ? ~((1ULL << ((r + 1) * 8)) - 1) : 0ULL;
+        WHITE_PASSED_SPAN[sq] = front_w & (FILE_MASKS[f] | ADJACENT_FILES[f]);
 
-// Mobility bonuses per number of safe squares (indexed by count, clamped)
-// MG values — mobility matters more in middlegame
-static inline constexpr int MOBILITY_MG[9] = {
-    -20, -8, 0, 4, 8, 12, 16, 20, 24
-};
+        Bitboard front_b = (r > 0) ? ((1ULL << (r * 8)) - 1) : 0ULL;
+        BLACK_PASSED_SPAN[sq] = front_b & (FILE_MASKS[f] | ADJACENT_FILES[f]);
+    }
 
-// EG values — slightly less important
-static inline constexpr int MOBILITY_EG[9] = {
-    -15, -5, 0, 3, 6, 9, 12, 15, 18
-};
+    for (int sq = 0; sq < 64; ++sq) {
+        int r = square_rank(static_cast<Square>(sq));
+        int f = square_file(static_cast<Square>(sq));
 
-// ═══════════════════════════════════════════════════════════════════
-// 5. KING SAFETY
-// ═══════════════════════════════════════════════════════════════════
+        // White
+        if (r + 1 < 8) {
+            for (int df = -1; df <= 1; ++df) {
+                int nf = f + df;
+                if (nf >= 0 && nf < 8) KING_SHIELD_1[WHITE][sq] |= (1ULL << make_square(static_cast<File>(nf), static_cast<Rank>(r + 1)));
+            }
+        }
+        if (r + 2 < 8) {
+            for (int df = -1; df <= 1; ++df) {
+                int nf = f + df;
+                if (nf >= 0 && nf < 8) KING_SHIELD_2[WHITE][sq] |= (1ULL << make_square(static_cast<File>(nf), static_cast<Rank>(r + 2)));
+            }
+        }
 
-// Pawn shield: bonus for each friendly pawn in front of king
-static inline constexpr int PAWN_SHIELD_BONUS = 8;
+        // Black
+        if (r - 1 >= 0) {
+            for (int df = -1; df <= 1; ++df) {
+                int nf = f + df;
+                if (nf >= 0 && nf < 8) KING_SHIELD_1[BLACK][sq] |= (1ULL << make_square(static_cast<File>(nf), static_cast<Rank>(r - 1)));
+            }
+        }
+        if (r - 2 >= 0) {
+            for (int df = -1; df <= 1; ++df) {
+                int nf = f + df;
+                if (nf >= 0 && nf < 8) KING_SHIELD_2[BLACK][sq] |= (1ULL << make_square(static_cast<File>(nf), static_cast<Rank>(r - 2)));
+            }
+        }
+    }
+}
 
-// Open file near king: penalty per open file adjacent to king
-static inline constexpr int OPEN_FILE_NEAR_KING_PENALTY = -20;
-
-// Attacker count penalty (indexed by count, quadratic scaling)
-static inline constexpr int ATTACKER_PENALTY[9] = {
+constexpr int ATTACKER_PENALTY[9] = {
     0, 0, -10, -25, -50, -80, -120, -170, -230
 };
+constexpr int OPEN_FILE_NEAR_KING_PENALTY = -20;
+constexpr int SEMI_OPEN_FILE_NEAR_KING_PENALTY = -10;
 
-// ═══════════════════════════════════════════════════════════════════
-// HELPER: Mirror square for black pieces
-// ═══════════════════════════════════════════════════════════════════
+inline int eval_king_safety(const Position& pos, Color c) noexcept {
+    Square ksq = pos.king_square(c);
+    if (ksq >= 64) return 0;
+    Bitboard friendly_pawns = pos.pieces[make_piece(c, PT_PAWN)];
+    Bitboard enemy_pawns = pos.pieces[make_piece(opponent_color(c), PT_PAWN)];
 
-// ═══════════════════════════════════════════════════════════════════
-// 1. TAPERED EVALUATION — Material + PST (O(1) Incremental)
-// ═══════════════════════════════════════════════════════════════════
+    int score = 0;
 
-static inline void eval_tapered(const Board& board, int& mg, int& eg) {
-    mg = board.material_score + board.mg_pst;
-    eg = board.material_score + board.eg_pst;
-}
+    // Pawn shield bonus
+    Bitboard s1 = friendly_pawns & KING_SHIELD_1[c][ksq];
+    Bitboard s2 = friendly_pawns & KING_SHIELD_2[c][ksq];
+    score += popcount(s1) * 15 + popcount(s2) * 8;
 
-// ═══════════════════════════════════════════════════════════════════
-// 2. BISHOP PAIR
-// ═══════════════════════════════════════════════════════════════════
-
-static inline void eval_bishop_pair(const Board& board, int& mg, int& eg) {
-    if (popcount64(board.bitboards[Piece::B]) >= 2) {
-        mg += BISHOP_PAIR_MG;
-        eg += BISHOP_PAIR_EG;
-    }
-    if (popcount64(board.bitboards[Piece::b]) >= 2) {
-        mg -= BISHOP_PAIR_MG;
-        eg -= BISHOP_PAIR_EG;
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// 3. PAWN STRUCTURE
-// ═══════════════════════════════════════════════════════════════════
-
-static inline void eval_pawn_structure(const Board& board, int& mg, int& eg) {
-    uint64_t white_pawns = board.bitboards[Piece::P];
-    uint64_t black_pawns = board.bitboards[Piece::p];
-
-    // ── Doubled pawns ──
-    int w_file_cnt[8] = {};
-    int b_file_cnt[8] = {};
-    uint64_t wp_scan = white_pawns;
-    uint64_t bp_scan = black_pawns;
-    while (wp_scan) w_file_cnt[pop_lsb(wp_scan) & 7]++;
-    while (bp_scan) b_file_cnt[pop_lsb(bp_scan) & 7]++;
-    for (int file = 0; file < 8; file++) {
-        if (w_file_cnt[file] > 1) {
-            int extra = w_file_cnt[file] - 1;
-            mg += DOUBLED_PAWN_PENALTY * extra;
-            eg += DOUBLED_PAWN_PENALTY * extra;
-        }
-        if (b_file_cnt[file] > 1) {
-            int extra = b_file_cnt[file] - 1;
-            mg -= DOUBLED_PAWN_PENALTY * extra;
-            eg -= DOUBLED_PAWN_PENALTY * extra;
-        }
-    }
-
-    // ── Isolated pawns ──
-    // Pawns with no friendly pawns on adjacent files
-    uint64_t w_adj = adjacent_files(white_pawns);
-    uint64_t b_adj = adjacent_files(black_pawns);
-    int w_isolated = popcount64(white_pawns & ~w_adj);
-    int b_isolated = popcount64(black_pawns & ~b_adj);
-    mg += w_isolated * ISOLATED_PAWN_PENALTY;
-    mg -= b_isolated * ISOLATED_PAWN_PENALTY;
-    eg += w_isolated * ISOLATED_PAWN_PENALTY;
-    eg -= b_isolated * ISOLATED_PAWN_PENALTY;
-
-    // ── Passed pawns ──
-    uint64_t w_passed = 0;
-    uint64_t b_passed = 0;
-
-    {
-        uint64_t wp = white_pawns;
-        while (wp) {
-            int sq = pop_lsb(wp);
-            int rank = sq / 8;
-            int file = sq % 8;
-            uint64_t file_mask = FILE_A_BB << file;
-            uint64_t adj = adjacent_files(file_mask);
-            uint64_t span = file_mask | adj;
-            uint64_t ahead = rank >= 7 ? 0ULL : (~0ULL << ((rank + 1) * 8));
-
-            if (!(black_pawns & span & ahead)) {
-                w_passed |= (1ULL << sq);
-                mg += PASSED_PAWN_MG[rank];
-                eg += PASSED_PAWN_EG[rank];
-            }
-        }
-    }
-    {
-        uint64_t bp = black_pawns;
-        while (bp) {
-            int sq = pop_lsb(bp);
-            int rank = sq / 8;
-            int file = sq % 8;
-            uint64_t file_mask = FILE_A_BB << file;
-            uint64_t adj = adjacent_files(file_mask);
-            uint64_t span = file_mask | adj;
-            uint64_t ahead = rank == 0 ? 0ULL : ((1ULL << (rank * 8)) - 1);
-
-            if (!(white_pawns & span & ahead)) {
-                b_passed |= (1ULL << sq);
-                int r = 7 - rank;
-                mg -= PASSED_PAWN_MG[r];
-                eg -= PASSED_PAWN_EG[r];
+    // Open and semi-open files penalty near king
+    int king_file = square_file(ksq);
+    for (int f = std::max(0, king_file - 1); f <= std::min(7, king_file + 1); ++f) {
+        if (!(friendly_pawns & FILE_MASKS[f])) {
+            if (!(enemy_pawns & FILE_MASKS[f])) {
+                score += OPEN_FILE_NEAR_KING_PENALTY;
+            } else {
+                score += SEMI_OPEN_FILE_NEAR_KING_PENALTY;
             }
         }
     }
 
-    // Connected passed pawns bonus
-    uint64_t w_connected = (w_passed >> 1) & w_passed;  // adjacent passed pawns
-    uint64_t b_connected = (b_passed >> 1) & b_passed;
-    mg += popcount64(w_connected) * CONNECTED_PASSED_BONUS;
-    mg -= popcount64(b_connected) * CONNECTED_PASSED_BONUS;
-    eg += popcount64(w_connected) * CONNECTED_PASSED_BONUS * 2;
-    eg -= popcount64(b_connected) * CONNECTED_PASSED_BONUS * 2;
-}
+    // Enemy piece attackers into king zone (king square + 8 surrounding squares)
+    Color enemy = opponent_color(c);
+    Bitboard king_zone = king_attacks(ksq) | (1ULL << ksq);
+    Bitboard occ = pos.occupancy();
+    int attackers = 0;
 
-// ═══════════════════════════════════════════════════════════════════
-// 4. MOBILITY
-// ═══════════════════════════════════════════════════════════════════
-
-static inline void eval_mobility_and_king_safety(const Board& board, int& mg, int& eg) {
-    uint64_t all_occ = board.occupancy[2];
-    uint64_t white_occ = board.occupancy[WHITE];
-    uint64_t black_occ = board.occupancy[BLACK];
-
-    // Compute King zones
-    int w_king_sq = lsb_index(board.bitboards[Piece::K]);
-    uint64_t w_king_zone = 0;
-    if (w_king_sq >= 0 && w_king_sq < 64) {
-        uint64_t king_bb = 1ULL << w_king_sq;
-        uint64_t king_east = (king_bb & ~FILE_H_BB) << 1;
-        uint64_t king_west = (king_bb & ~FILE_A_BB) >> 1;
-        uint64_t king_rank3 = king_bb | king_east | king_west;
-        w_king_zone = (king_rank3 | (king_rank3 << 8) | (king_rank3 >> 8)) & ~king_bb;
+    Bitboard kn = pos.pieces[make_piece(enemy, PT_KNIGHT)];
+    while (kn) {
+        Square s = pop_lsb(kn);
+        if (knight_attacks(s) & king_zone) attackers++;
     }
 
-    int b_king_sq = lsb_index(board.bitboards[Piece::k]);
-    uint64_t b_king_zone = 0;
-    if (b_king_sq >= 0 && b_king_sq < 64) {
-        uint64_t king_bb = 1ULL << b_king_sq;
-        uint64_t king_east = (king_bb & ~FILE_H_BB) << 1;
-        uint64_t king_west = (king_bb & ~FILE_A_BB) >> 1;
-        uint64_t king_rank3 = king_bb | king_east | king_west;
-        b_king_zone = (king_rank3 | (king_rank3 >> 8) | (king_rank3 << 8)) & ~king_bb;
+    Bitboard bi = pos.pieces[make_piece(enemy, PT_BISHOP)];
+    while (bi) {
+        Square s = pop_lsb(bi);
+        if (bishop_attacks(s, occ) & king_zone) attackers++;
     }
 
-    int w_attackers = 0;
-    int b_attackers = 0;
-
-    // ── White pieces: mobility & attackers against Black king ──
-    {
-        // Knights
-        uint64_t kn = board.bitboards[Piece::N];
-        while (kn) {
-            int sq = pop_lsb(kn);
-            uint64_t attacks = KNIGHT_ATTACKS_TABLE[sq];
-            if (attacks & b_king_zone) b_attackers++;
-            int count = min(8, popcount64(attacks & ~white_occ));
-            mg += MOBILITY_MG[count];
-            eg += MOBILITY_EG[count];
-        }
-
-        // Bishops
-        uint64_t bi = board.bitboards[Piece::B];
-        while (bi) {
-            int sq = pop_lsb(bi);
-            uint64_t attacks = bishop_attacks(sq, all_occ);
-            if (attacks & b_king_zone) b_attackers++;
-            int count = min(8, popcount64(attacks & ~white_occ));
-            mg += MOBILITY_MG[count];
-            eg += MOBILITY_EG[count];
-        }
-
-        // Rooks
-        uint64_t ro = board.bitboards[Piece::R];
-        while (ro) {
-            int sq = pop_lsb(ro);
-            uint64_t attacks = rook_attacks(sq, all_occ);
-            if (attacks & b_king_zone) b_attackers++;
-            int count = min(8, popcount64(attacks & ~white_occ));
-            mg += MOBILITY_MG[count];
-            eg += MOBILITY_EG[count];
-        }
-
-        // Queen
-        uint64_t qu = board.bitboards[Piece::Q];
-        while (qu) {
-            int sq = pop_lsb(qu);
-            uint64_t attacks = queen_attacks(sq, all_occ);
-            if (attacks & b_king_zone) b_attackers++;
-            int count = min(8, popcount64(attacks & ~white_occ));
-            mg += MOBILITY_MG[count];
-            eg += MOBILITY_EG[count];
-        }
+    Bitboard ro = pos.pieces[make_piece(enemy, PT_ROOK)];
+    while (ro) {
+        Square s = pop_lsb(ro);
+        if (rook_attacks(s, occ) & king_zone) attackers++;
     }
 
-    // ── Black pieces: mobility & attackers against White king ──
-    {
-        // Knights
-        uint64_t kn = board.bitboards[Piece::n];
-        while (kn) {
-            int sq = pop_lsb(kn);
-            uint64_t attacks = KNIGHT_ATTACKS_TABLE[sq];
-            if (attacks & w_king_zone) w_attackers++;
-            int count = min(8, popcount64(attacks & ~black_occ));
-            mg -= MOBILITY_MG[count];
-            eg -= MOBILITY_EG[count];
-        }
-
-        // Bishops
-        uint64_t bi = board.bitboards[Piece::b];
-        while (bi) {
-            int sq = pop_lsb(bi);
-            uint64_t attacks = bishop_attacks(sq, all_occ);
-            if (attacks & w_king_zone) w_attackers++;
-            int count = min(8, popcount64(attacks & ~black_occ));
-            mg -= MOBILITY_MG[count];
-            eg -= MOBILITY_EG[count];
-        }
-
-        // Rooks
-        uint64_t ro = board.bitboards[Piece::r];
-        while (ro) {
-            int sq = pop_lsb(ro);
-            uint64_t attacks = rook_attacks(sq, all_occ);
-            if (attacks & w_king_zone) w_attackers++;
-            int count = min(8, popcount64(attacks & ~black_occ));
-            mg -= MOBILITY_MG[count];
-            eg -= MOBILITY_EG[count];
-        }
-
-        // Queen
-        uint64_t qu = board.bitboards[Piece::q];
-        while (qu) {
-            int sq = pop_lsb(qu);
-            uint64_t attacks = queen_attacks(sq, all_occ);
-            if (attacks & w_king_zone) w_attackers++;
-            int count = min(8, popcount64(attacks & ~black_occ));
-            mg -= MOBILITY_MG[count];
-            eg -= MOBILITY_EG[count];
-        }
+    Bitboard qu = pos.pieces[make_piece(enemy, PT_QUEEN)];
+    while (qu) {
+        Square s = pop_lsb(qu);
+        if (queen_attacks(s, occ) & king_zone) attackers += 2;
     }
 
-    // ── White king safety (pawn shield + open files + enemy attackers) ──
-    if (w_king_sq >= 0 && w_king_sq < 64) {
-        int king_rank = w_king_sq / 8;
-        int king_file = w_king_sq % 8;
-
-        int shield_count = 0;
-        for (int r = king_rank + 1; r <= min(7, king_rank + 2); r++) {
-            for (int f = max(0, king_file - 1); f <= min(7, king_file + 1); f++) {
-                if (board.piece_on[r * 8 + f] == Piece::P) shield_count++;
-            }
-        }
-        mg += shield_count * PAWN_SHIELD_BONUS;
-
-        for (int f = max(0, king_file - 1); f <= min(7, king_file + 1); f++) {
-            uint64_t file_mask = FILE_A_BB << f;
-            if (!(board.bitboards[Piece::P] & file_mask)) {
-                mg += OPEN_FILE_NEAR_KING_PENALTY;
-            }
-        }
-
-        mg += ATTACKER_PENALTY[min(8, w_attackers)];
-    }
-
-    // ── Black king safety (pawn shield + open files + friendly attackers) ──
-    if (b_king_sq >= 0 && b_king_sq < 64) {
-        int king_rank = b_king_sq / 8;
-        int king_file = b_king_sq % 8;
-
-        int shield_count = 0;
-        for (int r = max(0, king_rank - 2); r <= king_rank - 1; r++) {
-            for (int f = max(0, king_file - 1); f <= min(7, king_file + 1); f++) {
-                if (board.piece_on[r * 8 + f] == Piece::p) shield_count++;
-            }
-        }
-        mg -= shield_count * PAWN_SHIELD_BONUS;
-
-        for (int f = max(0, king_file - 1); f <= min(7, king_file + 1); f++) {
-            uint64_t file_mask = FILE_A_BB << f;
-            if (!(board.bitboards[Piece::p] & file_mask)) {
-                mg -= OPEN_FILE_NEAR_KING_PENALTY;
-            }
-        }
-
-        mg -= ATTACKER_PENALTY[min(8, b_attackers)];
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// SINGLE PUBLIC FUNCTION — called by search
-// ═══════════════════════════════════════════════════════════════════
-
-inline int evaluate(Board& board) {
-    init_rules_luts();
-    // 1. Compute game phase (0 = endgame, MAX_PHASE = middlegame)
-    int phase = min(board.phase_score, MAX_PHASE);
-
-    // 2. Accumulate scores in MG and EG
-    int mg = 0, eg = 0;
-
-    eval_tapered(board, mg, eg);           // Material + PST
-    eval_bishop_pair(board, mg, eg);       // Bishop pair
-    eval_pawn_structure(board, mg, eg);    // Doubled, isolated, passed pawns
-    eval_mobility_and_king_safety(board, mg, eg); // Unified mobility and king safety
-
-    // 3. Tapered blend
-    int score = (mg * phase + eg * (MAX_PHASE - phase)) / MAX_PHASE;
-
-    // 4. Return from White's perspective (positive = White advantage)
-    // MINIMAX expects fixed perspective: White maximizes, Black minimizes
+    score += ATTACKER_PENALTY[std::min(8, attackers)];
     return score;
 }
 
-// ═════════════════════════════════════════════════════════════════════
-// OLD PIECE-SQUARE TABLES (non-tapered, used by old_evaluate only)
-// ═════════════════════════════════════════════════════════════════════
-
-inline constexpr int PAWN_PST[64] = {
-    0,0,0,0,0,0,0,0,
-    5,10,10,-20,-20,10,10,5,
-    5,-5,-10,0,0,-10,-5,5,
-    0,0,0,20,20,0,0,0,
-    5,5,10,25,25,10,5,5,
-    10,10,20,30,30,20,10,10,
-    50,50,50,50,50,50,50,50,
-    0,0,0,0,0,0,0,0
-};
-
-inline constexpr int KNIGHT_PST[64] = {
-    -50,-40,-30,-30,-30,-30,-40,-50,
-    -40,-20,0,5,5,0,-20,-40,
-    -30,5,10,15,15,10,5,-30,
-    -30,0,15,20,20,15,0,-30,
-    -30,5,15,20,20,15,5,-30,
-    -30,0,10,15,15,10,0,-30,
-    -40,-20,0,0,0,0,-20,-40,
-    -50,-40,-30,-30,-30,-30,-40,-50
-};
-
-inline constexpr int BISHOP_PST[64] = {
-    -20,-10,-10,-10,-10,-10,-10,-20,
-    -10,5,0,0,0,0,5,-10,
-    -10,10,10,10,10,10,10,-10,
-    -10,0,10,10,10,10,0,-10,
-    -10,5,5,10,10,5,5,-10,
-    -10,0,5,10,10,5,0,-10,
-    -10,0,0,0,0,0,0,-10,
-    -20,-10,-10,-10,-10,-10,-10,-20
-};
-
-inline constexpr int ROOK_PST[64] = {
-    0,0,0,5,5,0,0,0,
-    -5,0,0,0,0,0,0,-5,
-    -5,0,0,0,0,0,0,-5,
-    -5,0,0,0,0,0,0,-5,
-    -5,0,0,0,0,0,0,-5,
-    -5,0,0,0,0,0,0,-5,
-    5,10,10,10,10,10,10,5,
-    0,0,0,0,0,0,0,0
-};
-
-inline constexpr int QUEEN_PST[64] = {
-    -20,-10,-10,-5,-5,-10,-10,-20,
-    -10,0,5,0,0,0,0,-10,
-    -10,5,5,5,5,5,0,-10,
-    0,0,5,5,5,5,0,-5,
-    -5,0,5,5,5,5,0,-5,
-    -10,0,5,5,5,5,0,-10,
-    -10,0,0,0,0,0,0,-10,
-    -20,-10,-10,-5,-5,-10,-10,-20
-};
-
-inline constexpr int KING_PST[64] = {
-    20,30,10,0,0,10,30,20,
-    20,20,0,0,0,0,20,20,
-    -10,-20,-20,-20,-20,-20,-20,-10,
-    -20,-30,-30,-40,-40,-30,-30,-20,
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -30,-40,-40,-50,-50,-40,-40,-30
-};
-
-// ═════════════════════════════════════════════════════════════════════
-// OLD EVALUATOR - simple PST-only, no tapering (used by OldEngine)
-// Uses the original non-tapered tables above, NOT the MG/EG tables.
-// ═════════════════════════════════════════════════════════════════════
-
-inline int old_evaluate(Board& board) {
-    int total_eval = 0;
-    for (int sq = 0; sq < 64; sq++) {
-        Piece piece = board.piece_on[sq];
-        if (piece == (Piece)0xF) continue;
-
-        int piece_val = PIECE_VALUE[piece];
-        int table_sq  = piece < 6 ? sq : mirror_square(sq);
-
-        switch (piece) {
-            case Piece::P: case Piece::p: piece_val += PAWN_PST[table_sq];   break;
-            case Piece::N: case Piece::n: piece_val += KNIGHT_PST[table_sq]; break;
-            case Piece::B: case Piece::b: piece_val += BISHOP_PST[table_sq]; break;
-            case Piece::R: case Piece::r: piece_val += ROOK_PST[table_sq];   break;
-            case Piece::Q: case Piece::q: piece_val += QUEEN_PST[table_sq];  break;
-            case Piece::K: case Piece::k: piece_val += KING_PST[table_sq];   break;
-            default: break;
-        }
-        total_eval += piece < 6 ? piece_val : -piece_val;
-    }
-    return total_eval;
+inline void init_eval() noexcept {
+    init_king_shields();
 }
+
+// ── Master Tapered Evaluation Function ───────────────────────────────────────
+inline int evaluate(const Position& pos) noexcept {
+    init_king_shields();
+
+    // If an external Reinforcement Learning / neural hook is registered, use it
+    if (ACTIVE_EVAL_HOOK) {
+        return ACTIVE_EVAL_HOOK(pos);
+    }
+
+    // Incremental PST & Material base (O(1))
+    int mg = pos.state->eval_mg;
+    int eg = pos.state->eval_eg;
+
+    // Pawn structure
+    eval_pawns(pos, mg, eg);
+
+    // Piece features (Bishop pair, open files)
+    eval_pieces(pos, mg, eg);
+
+    // King safety (Middlegame only, skip when endgame)
+    if (pos.state->game_phase > 0) {
+        mg += eval_king_safety(pos, WHITE);
+        mg -= eval_king_safety(pos, BLACK);
+    }
+
+    // Tapered blending by game phase (0 = Endgame, 24 = Opening/Middlegame)
+    int phase = std::clamp(pos.state->game_phase, 0, MAX_PHASE);
+    int tapered_score = (mg * phase + eg * (MAX_PHASE - phase)) / MAX_PHASE;
+
+    // Return score from side to move's perspective
+    return (pos.side_to_move == WHITE) ? tapered_score : -tapered_score;
+}
+
+} // namespace tigerfish

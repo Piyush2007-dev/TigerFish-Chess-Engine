@@ -3,6 +3,13 @@
 *.o
 *.obj
 *.out
+*.bak
+
+# Tool & test binaries
+tools/bin/*.exe
+scratch/*.exe
+Test/**/build/
+Test/**/temp_*.exe
 
 __pycache__/
 # Environment & secrets
@@ -14,3 +21,4 @@ old_files/
 SOP.md
 .DS_Store
 Thumbs.db
+.freebuff/

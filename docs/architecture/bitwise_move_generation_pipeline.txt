@@ -1,0 +1,240 @@
+╔══════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                     TIGERFISH MOVE GENERATION PIPELINE — COMPLETE BITWISE FLOW                  ║
+╚══════════════════════════════════════════════════════════════════════════════════════════════════╝
+
+INPUTS FROM Board STRUCT
+─────────────────────────────────────────────────────────────────────────────
+  bitboards[12]    uint64_t   P,N,B,R,Q,K | p,n,b,r,q,k  — one 64-bit int per piece type
+  occupancy[3]     uint64_t   [WHITE] [BLACK] [ALL]        — OR of piece bitboards
+  castling_rights  uint8_t    bitmask:  K=1, Q=2, k=4, q=8
+  en_passant       uint8_t    0–63 target sq, or 255=none
+  side_to_move     Color      WHITE=0, BLACK=1
+  piece_on[64]     Piece[]    direct square→piece lookup
+  ray_table[8][64] uint64_t   precomputed rays (NORTH,SOUTH,EAST,WEST,NE,SE,NW,SW)
+  ROOK_ATTACKS/BISHOP_ATTACKS  precomputed magic tables (from magic_lut.cpp)
+─────────────────────────────────────────────────────────────────────────────
+
+                          generate_moves(Board&, MoveList&)   ← ENTRY POINT
+                                        │
+      ┌─────────────────────────────────┼──────────────────────────────────┐
+      │                                 │                                  │
+      ▼                                 │                                  │
+╔═══════════════════╗                   │                                  │
+║  PHASE 1: PINS    ║                   │                                  │
+║  find_pins()      ║                   │                                  │
+╚═══════════════════╝                   │                                  │
+                                        │                                  │
+  For each of 8 directions from King:   │                                  │
+                                        │                                  │
+  1. ray = ray_table[dir][king_sq]      │        ← 1 array lookup         │
+  2. blockers = ray & occupancy[2]      │        ← 1 AND                  │
+  3. first = lsb/msb(blockers)          │        ← 1 BSF/BSR instruction  │
+  4. first_bb = 1ULL << first           │        ← 1 SHIFT                │
+  5. if !(first_bb & friendly) skip     │        ← 1 AND                  │
+  6. blockers &= ~first_bb              │        ← 1 AND + NOT            │
+  7. second = lsb/msb(blockers)         │        ← 1 BSF/BSR             │
+  8. check if second is enemy slider    │        ← 1 comparison           │
+  9. pinned |= first_bb                 │        ← 1 OR                   │
+ 10. pin_mask[first] = ray | back_ray   │        ← 1 OR + write           │
+                                        │
+  Worst case: 8 dirs × 10 ops = ~80 bitwise ops                           │
+  Output: PinInfo { pinned:uint64_t, pin_mask[64]:uint64_t[] }            │
+                                        │
+                                        ▼
+╔══════════════════════════════════════════════════════════╗
+║  PHASE 2: BUILD ENEMY ATTACK MASK + CHECKERS            ║
+║  (All run inside generate_moves before any move is gen) ║
+╚══════════════════════════════════════════════════════════╝
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  pawnatk(board, checkers)           — Enemy PAWN attacks            │
+  │    Per enemy pawn:                                                  │
+  │      left_side  = (lsb & NOT_A_FILE) >> 9    ← 1 AND + 1 SHIFT     │
+  │      right_side = (lsb & NOT_H_FILE) >> 7    ← 1 AND + 1 SHIFT     │
+  │      attacks    = left_side | right_side       ← 1 OR               │
+  │      if attacks & king_bb → checkers |= lsb   ← 1 AND + 1 OR       │
+  │      attack_mask |= attacks                   ← 1 OR               │
+  │      mask &= mask-1   (clear LSB)             ← 1 SUB + 1 AND      │
+  │  Per pawn: ~8 ops.   Up to 8 enemy pawns → max ~64 ops             │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  knightatk(board, checkers)         — Enemy KNIGHT attacks          │
+  │    Per enemy knight:                                                │
+  │      l1 = (lsb & NOT_H_FILE)  << 1   ← AND + SHIFT                │
+  │      l2 = (lsb & NOT_GH_FILE) << 2   ← AND + SHIFT                │
+  │      r1 = (lsb & NOT_A_FILE)  >> 1   ← AND + SHIFT                │
+  │      r2 = (lsb & NOT_AB_FILE) >> 2   ← AND + SHIFT                │
+  │      h1 = l1 | r1                    ← OR                          │
+  │      h2 = l2 | r2                    ← OR                          │
+  │      attacks = (h1<<16)|(h1>>16)|(h2<<8)|(h2>>8) ← 4 SHIFTS + 3 OR│
+  │      if attacks & king_bb → checkers |= lsb  ← AND + OR            │
+  │      attack_mask |= attacks          ← OR                          │
+  │      mask &= mask-1                  ← SUB + AND                   │
+  │  Per knight: ~14 ops.  Up to 10 enemy knights → max ~140 ops       │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  sliding_atks(board, BISHOP, 4,8, checkers)   — Enemy BISHOP atks  │
+  │  sliding_atks(board, ROOK,   0,4, checkers)   — Enemy ROOK atks    │
+  │  sliding_atks(board, QUEEN,  0,8, checkers)   — Enemy QUEEN atks   │
+  │                                                                     │
+  │    occ = occupancy[2] ^ king_bitboard   ← XOR (king transparent)   │
+  │    Per piece:                                                       │
+  │      bishop_attacks(sq, occ):                                       │
+  │        occ &= BISHOP_MASK[sq]           ← 1 AND                    │
+  │        idx = (occ * BISHOP_MAGICS[sq]) >> BISHOP_SHIFT[sq]         │
+  │              ← 1 MUL + 1 SHIFT                                     │
+  │        return BISHOP_ATTACKS[sq][idx]   ← 1 table lookup           │
+  │      Total per bishop: 4 ops                                        │
+  │      if attacks & king_bb → checkers |= (1ULL<<sq)  ← AND + OR    │
+  │      attack_mask |= attacks             ← OR                        │
+  │      mask &= mask-1                     ← SUB + AND                │
+  │  Per sliding piece: ~7 ops. Up to 9 sliders → max ~63 ops          │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  kingatk(board)                     — Enemy KING attacks            │
+  │    east = (king_bb & NOT_H_FILE) << 1   ← AND + SHIFT              │
+  │    west = (king_bb & NOT_A_FILE) >> 1   ← AND + SHIFT              │
+  │    r    = king_bb | east | west         ← 2 OR                     │
+  │    mask = (r<<8 | r | r>>8) & ~king_bb  ← 2 SHIFT + 2 OR + NOT+AND│
+  │  Fixed: ~9 ops. Always exactly 1 king.                             │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  Output: attack_mask (uint64_t), checkers (uint64_t)
+  check_count = __builtin_popcountll(checkers)   ← 1 POPCNT instruction
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │   check_count = 0   →  BRANCH A: Normal move generation            │
+  │   check_count = 1   →  BRANCH B: Single check (restricted moves)   │
+  │   check_count = 2+  →  BRANCH C: Double check (king moves ONLY)    │
+  └──────────────────────────────────────────────────────────────────────┘
+
+                          │
+         ┌────────────────┼───────────────────┐
+         ▼                ▼                   ▼
+    BRANCH A         BRANCH B           BRANCH C
+  legal_mask=ALL   legal_mask=         KingMoves()
+                  (block/capture        ONLY
+                   the checker)
+         │                │                   │
+         └────────────────┴───────────────────┘
+                          │
+                          ▼
+╔══════════════════════════════════════════════════════════════════════════╗
+║  PHASE 3: MOVE GENERATION PER PIECE TYPE (6 functions)                 ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+──────────────────────────────────────────────────────
+  KingMoves(board, moves, attack_mask)
+──────────────────────────────────────────────────────
+  east  = (king & NOT_H_FILE) << 1       ← AND + SHIFT
+  west  = (king & NOT_A_FILE) >> 1       ← AND + SHIFT
+  r     = king | east | west             ← 2 OR
+  raw   = (r<<8 | r | r>>8) & ~lsb      ← 2 SHIFT + 2 OR + NOT + AND
+  raw  &= ~attack_mask                   ← NOT + AND  (remove attacked sqs)
+  captures = raw & occupancy[enemy]      ← AND
+  moves    = raw & ~occupancy[2]         ← NOT + AND
+  Castling: check castling_rights bits,  ← 2 AND + 2 AND bitmask checks
+            occupancy[2] clear squares,
+            attack_mask clear king path
+  Per square found: pack_move() →32-bit  ← 5 shifts + 5 ORs per move
+  ~12 ops base + ~10 per legal square
+
+──────────────────────────────────────────────────────
+  PawnMoves(board, moves, pins, legal_mask)
+──────────────────────────────────────────────────────
+  single_push  = (pawn << 8) & ~occupancy[2]               ← SHIFT + NOT + AND
+  rank2_pawns  = pawn & RANK_2                              ← AND
+  first_step   = (rank2_pawns << 8) & ~occupancy[2]         ← SHIFT + NOT + AND
+  double_push  = (first_step << 8) & ~occupancy[2]          ← SHIFT + NOT + AND
+  left_caps    = (pawn & NOT_H_FILE) << 9                   ← AND + SHIFT
+  right_caps   = (pawn & NOT_A_FILE) << 7                   ← AND + SHIFT
+  captures     = (left_caps | right_caps) & occupancy[enemy]← OR + AND
+  captures    &= legal_mask                                 ← AND
+  push_mask    = (single|double) & legal_mask & ~promo_rank ← AND + AND + NOT
+  Per legal target square:
+    check pin_mask[from] & (1ULL<<to)    ← 1 AND
+    pack_move()                          ← 5 shifts + 5 ORs
+  En passant special:
+    ep_bb = 1ULL << en_passant           ← SHIFT
+    ep_pawns check 2 diagonal sqs        ← 4 AND + 2 SHIFT + 2 OR
+    ep_exposes_king() if needed          ← ~40 more ops (8 ray checks)
+  ~20 base ops + ~12 per legal pawn
+
+──────────────────────────────────────────────────────
+  KnightMoves → append_knight_moves()
+──────────────────────────────────────────────────────
+  Per knight:
+    if (pinned & lsb): skip             ← 1 AND (pinned knight = 0 moves)
+    knight_attacks() → 14 ops (as above)
+    moves_mask &= legal_mask            ← AND
+    captures   &= legal_mask            ← AND
+    pack_move() per legal square        ← 5 shifts + 5 ORs per move
+  ~16 base ops per knight
+
+──────────────────────────────────────────────────────
+  BishopMoves  → append_sliding_moves(piece, dir 4→8)
+  RookMoves    → append_sliding_moves(piece, dir 0→4)
+  QueenMoves   → append_sliding_moves(piece, dir 0→8)
+──────────────────────────────────────────────────────
+  Per piece:
+    pmask = pins.pin_mask[from_sq]      ← 1 array lookup
+    bishop/rook/queen_attacks(sq, occ): ← 4 ops (MAGIC lookup)
+    attacks &= ~own_occ                 ← NOT + AND
+    attack_mask |= attacks              ← OR
+    legal = attacks & legal_mask & pmask← 2 AND
+    quiets   = legal & ~all_occ        ← NOT + AND
+    captures = legal & enemy_occ       ← AND
+    Per quiet: pop_lsb + pack_move     ← BSF + SUB + AND + 10 shift/OR ops
+    Per capture: same + piece_on lookup← 12 ops
+    mask &= mask-1  (advance to next)  ← SUB + AND
+  ~12 base ops per sliding piece
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  PHASE 4: PACK EACH LEGAL MOVE INTO 32-BIT INTEGER                     ║
+║  pack_move(from, to, piece, cap, promo, castle, ep, dbl_push)          ║
+╚══════════════════════════════════════════════════════════════════════════╝
+  m  = from & 0x3F              Bits 0–5   ← AND
+  m |= (to & 0x3F) << 6         Bits 6–11  ← AND + SHIFT + OR
+  m |= (piece & 0xF) << 12      Bits 12–15 ← AND + SHIFT + OR
+  m |= (cap & 0xF) << 16        Bits 16–19 ← AND + SHIFT + OR
+  m |= (promo & 0xF) << 20      Bits 20–23 ← AND + SHIFT + OR
+  m |= (castling_rights) << 24  Bits 24–27 ← SHIFT + OR
+  m |= is_castle << 28          Bit 28     ← SHIFT + OR
+  m |= is_ep << 29              Bit 29     ← SHIFT + OR
+  m |= is_dbl_push << 30        Bit 30     ← SHIFT + OR
+  m |= side_to_move << 31       Bit 31     ← SHIFT + OR
+  Total: ~20 bitwise ops per move packed
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  OUTPUT: MoveList { move_list[218]:uint32_t[], count:int }             ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+──────────────────────────────────────────────────────────────────────────
+  OPERATION COUNT SUMMARY (Typical Middlegame Position)
+──────────────────────────────────────────────────────────────────────────
+
+  Stage                        Function(s)              ~Ops
+  ─────────────────────────────────────────────────────────────
+  Pin detection                find_pins()              ~80
+  Enemy pawn attacks           pawnatk()                ~64
+  Enemy knight attacks         knightatk()              ~100
+  Enemy sliding piece attacks  sliding_atks() ×3        ~150
+  Enemy king attacks           kingatk()                ~9
+  Check count                  popcountll()             ~1
+  ─────────────────────────────────────────────────────────────
+  King moves                   KingMoves()              ~30
+  Pawn moves (~20 pawns)       PawnMoves()              ~200
+  Knight moves (~4 knights)    KnightMoves()            ~80
+  Bishop moves                 BishopMoves()            ~40
+  Rook moves                   RookMoves()              ~40
+  Queen moves                  QueenMoves()             ~60
+  ─────────────────────────────────────────────────────────────
+  Pack ~35 moves               pack_move() ×35          ~700
+  ─────────────────────────────────────────────────────────────
+  TOTAL                                                ~1,554 bitwise ops
+  ─────────────────────────────────────────────────────────────
+  All are register-level 64-bit CPU ops (AND/OR/SHIFT/MUL).
+  At 3GHz: entire generate_moves() completes in ~1 microsecond.

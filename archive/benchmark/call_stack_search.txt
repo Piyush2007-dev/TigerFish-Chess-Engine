@@ -1,0 +1,52 @@
+===================================================================================================================================================
+                                      VERIFIED FULL MINIMAX SEARCH TREE (3 PARALLEL ROOT COLUMNS)
+===================================================================================================================================================
+
+                                                    ╔═══════════════════════════════════════════════╗
+                                                    ║            [DEPTH 3: ROOT (WHITE)]            ║
+                                                    ║  alpha_start = -100000, beta_start = +100000  ║
+                                                    ║  max_eval_start = -100000                     ║
+                                                    ║  FINAL BEST MOVE: "1. d4" (Score: +40)        ║
+                                                    ╚═══════════════╤═══════════════╤═══════════════╝
+                                                                    │               │
+                                    ┌───────────────────────────────┼───────────────┐
+                                    │ (Iteration 1: Move 1. e4)     │ (Iteration 2: Move 1. d4)     │ (Iteration 3: Move 1. g4)
+                                    ▼                               ▼                               ▼
+         ╔═══════════════════════════════╗               ╔═══════════════════════╗               ╔═══════════════════════╗
+         ║   [DEPTH 2: MOVE 1 (1. e4)]   ║               ║ [DEPTH 2: MOVE 2 (d4)]║               ║ [DEPTH 2: MOVE 3 (g4)]║
+         ║  Side: BLACK (max = false)    ║               ║  Side: BLACK (max=false)              ║  Side: BLACK (max=false)              ║
+         ║  alpha_in = -100k, beta_in =+100k             ║  alpha_in = +15, beta=+100k           ║  alpha_in = +40, beta=+100k           ║
+         ║  min_eval_start = +100000     ║               ║  min_eval_start = +100000             ║  min_eval_start = +100000             ║
+         ║  RETURNS TO ROOT: eval = +15  ║               ║  RETURNS TO ROOT: eval = +40          ║  RETURNS TO ROOT: eval = -900         ║
+         ║  ★ ROOT max_eval = +15 ★      ║               ║  ★ ROOT max_eval = +40 ★              ║  (Root rejects -900, max_eval = +40)  ║
+         ║  ★ ROOT alpha    = +15 ★      ║               ║  ★ ROOT alpha    = +40 ★              ║  (Alpha remains +40)                  ║
+         ╚═══════╤───────────╤───────────╝               ╚═══════╤───────╤───────╝               ╚═══════╤───────────╤───────────╝
+                 │           │                                   │       │                               │           │
+      ┌──────────┘           └──────────┐             ┌──────────┘       └──────────┐             ┌──────────┘           └──────────┐
+      │ Iteration 1          Iteration 2│             │ Iteration 1          Iteration 2│             │ Iteration 1          Iteration 2│
+      ▼                         ▼                     ▼                     ▼                     ▼                         ▼
+╔══════════════════════╗  ╔══════════════════════╗  ╔══════════════════════╗  ╔══════════════════════╗  ╔══════════════════════╗  ╔══════════════════════╗
+║ [DEPTH 1: WHITE 1a]  ║  ║ [DEPTH 1: WHITE 1b]  ║  ║ [DEPTH 1: WHITE 2a]  ║  ║ [DEPTH 1: WHITE 2b]  ║  ║ [DEPTH 1: WHITE 3a]  ║  ║ [DEPTH 1: WHITE 3b]  ║
+║ Side: WHITE (max)    ║  ║ Side: WHITE (max)    ║  ║ Side: WHITE (max)    ║  ║ Side: WHITE (max)    ║  ║ Side: WHITE (max)    ║  ║ Side: WHITE (max)    ║
+║ Move: 1... c5        ║  ║ Move: 1... e5        ║  ║ Move: 1... d5        ║  ║ Move: 1... Nf6       ║  ║ Move: 1... Qxg4      ║  ║ Move: 1... d5        ║
+║ alpha_in = -100000   ║  ║ alpha_in = -100000   ║  ║ alpha_in = +15       ║  ║ alpha_in = +15       ║  ║ alpha_in = +40       ║  ║ SKIPPED!             ║
+║ beta_in  = +100000   ║  ║ beta_in  = +30       ║  ║ beta_in  = +100000   ║  ║ beta_in  = +50       ║  ║ beta_in  = +100000   ║  ║                      ║
+║ RETURNS: eval = +30  ║  ║ RETURNS: eval = +15  ║  ║ RETURNS: eval = +50  ║  ║ RETURNS: eval = +40  ║  ║ RETURNS: eval = -900  ║  ║ 💥 PRUNED!          ║
+║ ★ max_eval = +30 ★   ║  ║ ★ max_eval = +15 ★   ║  ║ ★ max_eval = +50 ★   ║  ║ ★ max_eval = +40 ★   ║  ║ ★ max_eval = -900 ★  ║  ║ (Never executed)     ║
+║ ★ alpha    = +30 ★   ║  ║ ★ alpha    = +15 ★   ║  ║ ★ alpha    = +50 ★   ║  ║ ★ alpha    = +50 ★  ║  ║ ★ alpha    = +40 ★   ║  ║                      ║
+╚══╤════════╤════════╤═╝  ╚══╤════════╤════════╤═╝  ╚══╤════════╤════════╤═╝  ╚══╤════════╤════════╤═╝  ║                      ║  ╚══════════════════════╝
+   │        │        │       │        │        │       │        │        │       │        │        │    ║ 💥 CUTOFF TRIGGERED! ║
+   ▼        ▼        ▼       ▼        ▼        ▼       ▼        ▼        ▼       ▼        ▼        ▼    ║ Condition:           ║
+┌──────┐ ┌──────┐ ┌──────┐┌──────┐ ┌──────┐ ┌──────┐┌──────┐ ┌──────┐ ┌──────┐┌──────┐ ┌──────┐ ┌──────┐ ║ (beta <= alpha)      ║
+│2.Nf3 │ │2.Nc3 │ │2.d4  ││2.Nf3 │ │2.Bc4 │ │2.Nc3 ││2.c4  │ │2.Nf3 │ │2.e3  ││2.c4  │ │2.Nf3 │ │2.g3  │ ║ (-900 <= +40) => TRUE ║
+│d=0   │ │d=0   │ │d=0   ││d=0   │ │d=0   │ │d=0   ││d=0   │ │d=0   │ │d=0   ││d=0   │ │d=0   │ │d=0   │ ║                      ║
+│eval  │ │eval  │ │eval  ││eval  │ │eval  │ │eval  ││eval  │ │eval  │ │eval  ││eval  │ │eval  │ │eval  │ ║ 'break;' RUNS!       ║
+│ =+30 │ │ =+25 │ │ =+20 ││ =+15 │ │ =+10 │ │ =+5  ││ =+50 │ │ =+45 │ │ =+40 ││ =+40 │ │ =+35 │ │ =+30 │ ╚══════════╤═══════════╝
+└──────┘ └──────┘ └──────┘└──────┘ └──────┘ └──────┘└──────┘ └──────┘ └──────┘└──────┘ └──────┘ └──────┘            │
+                                                                                                                    ▼
+                                                                                                            ┌──────────────┐
+                                                                                                            │ 2. d4        │
+                                                                                                            │ d=0          │
+                                                                                                            │ eval = -900  │
+                                                                                                            │ max_eval=-900│
+                                                                                                            └──────────────┘

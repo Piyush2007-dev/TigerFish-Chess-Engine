@@ -1,0 +1,18 @@
+{
+  "tactical_accuracy": {
+    "total_positions": 200,
+    "oldsearch_solved": 80,
+    "oldsearch_rate": 0.4,
+    "enhanced_solved": 70,
+    "enhanced_rate": 0.35
+  },
+  "performance_standard_positions": {
+    "oldsearch_nodes": 158044834,
+    "oldsearch_time_ms": 40006.614,
+    "oldsearch_nps": 3950467,
+    "enhanced_nodes": 131138,
+    "enhanced_time_ms": 168.69,
+    "enhanced_nps": 777390,
+    "speedup_ratio": 237.16
+  }
+}
