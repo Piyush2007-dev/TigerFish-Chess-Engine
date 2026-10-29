@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-TigerFish Lichess Parallel Multi-Bot (10 Concurrent Games @ Depth 7)
-===================================================================
+TigerFish Lichess Parallel Multi-Bot (16 Concurrent Games @ Adaptive Depth 14-36)
+==================================================================================
 A high-performance asynchronous bot bridge for Lichess using asyncio,
 aiohttp, and the compiled TigerFish C++ engine executable (`game.exe`).
 
 Features:
-- Handles up to 10 parallel games concurrently.
-- Enforces depth 7 search on all engine evaluations.
-- Auto-accepts standard challenges across all time controls.
-- Uses `game.exe apply` + `game.exe best` for clean FEN tracking.
+- Handles up to 16 parallel games concurrently.
+- Adaptive deep search (depth 14-36) scaled to time control and clock budget.
+- Dynamic phase-aware time management with lag buffers and panic protection.
+- Auto-accepts standard challenges and actively seeks bot matches.
+- Uses `game.exe apply` + `game.exe best` for clean persistent FEN and TT tracking.
 - Graceful shutdown via 'q' + Enter or Ctrl+C (finishes active games).
 - Clean terminal status reporting and HTTP health check server.
 """
@@ -71,10 +72,11 @@ def start_health_server():
     except Exception as e:
         logger.warning(f"Health check server could not start on port {port}: {e}")
 
-def calculate_search_time(state: dict, my_color: str, default_time_ms: int = 2000) -> int:
+def calculate_search_time(state: dict, my_color: str, speed: str = "rapid", move_num: int = 1, default_time_ms: int = 3000) -> int:
     """
-    Calculate optimal search time budget in milliseconds based on remaining clock and increment.
-    Protects against flagging with adaptive panic caps and network latency buffers.
+    Calculate optimal search time budget in milliseconds based on remaining clock, increment,
+    game speed category, and move number.
+    Allocates more generous budgets for critical middle-game moves while safeguarding against flagging.
     """
     if not state:
         return default_time_ms
@@ -88,27 +90,68 @@ def calculate_search_time(state: dict, my_color: str, default_time_ms: int = 200
     if remaining is None or remaining <= 0:
         return default_time_ms
 
-    # Network latency safety buffer (100ms for HTTP transmission round-trip)
-    lag_buffer = 100
+    # Network latency safety buffer tailored to game speed
+    speed_lower = speed.lower() if speed else "rapid"
+    if "bullet" in speed_lower:
+        lag_buffer = 100
+    elif "blitz" in speed_lower:
+        lag_buffer = 120
+    else:
+        lag_buffer = 150
+
     safe_remaining = max(50, remaining - lag_buffer)
 
-    # Base target allocation: 1/25th of remaining time + 75% of increment
-    allocated = (safe_remaining / 25.0) + (inc * 0.75)
-
-    # Adaptive upper bound caps:
-    if safe_remaining < 1500:
-        # Emergency scramble: spend at most 30% of remaining to never flag
-        allocated = min(allocated, safe_remaining * 0.30)
-    elif safe_remaining < 5000:
-        # Low time: spend at most 25% of remaining
-        allocated = min(allocated, safe_remaining * 0.25)
+    # Speed-specific maximum move time cap so long-format games don't freeze on single moves:
+    if "bullet" in speed_lower:
+        max_cap = 4000      # max 4.0s per move in bullet
+    elif "blitz" in speed_lower:
+        max_cap = 8000      # max 8.0s per move in blitz
+    elif "rapid" in speed_lower:
+        max_cap = 16000     # max 16.0s per move in rapid
     else:
-        # Standard time: cap at 20% of remaining
-        allocated = min(allocated, safe_remaining * 0.20)
+        max_cap = 28000     # max 28.0s per move in classical (avoids 2-3 minute freezes!)
 
-    # Minimum threshold: at least 50ms so engine completes shallow iterations
-    allocated = max(50, min(allocated, safe_remaining))
+    # Move-count & phase-aware allocation:
+    # Moves 1-4 (early opening): allocate a measured budget so the bot doesn't burn massive time
+    # on early opening moves, preserving clock for sharp tactical middle-game positions.
+    if move_num <= 4:
+        if "bullet" in speed_lower:
+            target = min(safe_remaining * 0.05, 1200) + (inc * 0.5)
+        elif "blitz" in speed_lower:
+            target = min(safe_remaining * 0.05, 2500) + (inc * 0.6)
+        elif "rapid" in speed_lower:
+            target = min(safe_remaining * 0.04, 4000) + (inc * 0.7)
+        else:
+            target = min(safe_remaining * 0.03, 6000) + (inc * 0.7)
+        allocated = max(target, 400)
+    else:
+        # Low time & scramble allocation
+        if safe_remaining < 1500:
+            allocated = min(max(50, safe_remaining * 0.20) + (inc * 0.6), safe_remaining * 0.25)
+        elif safe_remaining < 5000:
+            allocated = min(max(100, safe_remaining * 0.20) + (inc * 0.7), safe_remaining * 0.25)
+        elif safe_remaining < 15000:
+            allocated = min((safe_remaining / 20.0) + (inc * 0.75), safe_remaining * 0.22)
+        else:
+            # Standard ample time: 1/25th of remaining clock + 75% increment
+            allocated = min((safe_remaining / 25.0) + (inc * 0.75), safe_remaining * 0.20)
 
+    # Apply per-speed maximum cap
+    allocated = min(allocated, max_cap)
+
+    # Minimum threshold floor to prevent instant moves when time is healthy:
+    if safe_remaining >= 60000:
+        min_floor = 2000
+    elif safe_remaining >= 30000:
+        min_floor = 1200
+    elif safe_remaining >= 10000:
+        min_floor = 600
+    elif safe_remaining >= 3000:
+        min_floor = 250
+    else:
+        min_floor = 50
+
+    allocated = max(min_floor, min(allocated, safe_remaining))
     return int(allocated)
 
 # ── Per-Game Engine Process ────────────────────────────────────────────
@@ -117,9 +160,10 @@ def calculate_search_time(state: dict, my_color: str, default_time_ms: int = 200
 class GameEngineProcess:
     """Manages a single persistent `game.exe interactive` subprocess."""
 
-    def __init__(self, engine_path: str, depth: int = 12):
+    def __init__(self, engine_path: str, depth: int = 24, speed: str = "rapid"):
         self.engine_path = engine_path
         self.depth = depth
+        self.speed = speed
         self._proc: asyncio.subprocess.Process = None
 
     async def start(self, initial_fen: str):
@@ -189,26 +233,28 @@ class GameEngineProcess:
 # ── Shared engine config (path + depth, no TT) ────────────────────────
 class EngineConfig:
     """Lightweight config used to spawn per-game GameEngineProcess instances."""
-    def __init__(self, engine_path: str, default_depth: int = 12):
+    def __init__(self, engine_path: str, default_depth: int = 24):
         self.engine_path = engine_path
         self.default_depth = default_depth
         
     def new_game_process(self, speed: str, clock: dict = None) -> "GameEngineProcess":
         speed_depths = {
-            "ultraBullet": 8,
-            "bullet": 10,
-            "blitz": 12,
-            "rapid": 14,
-            "classical": 16
+            "ultrabullet": 14,
+            "bullet": 18,
+            "blitz": 24,
+            "rapid": 30,
+            "classical": 36,
+            "correspondence": 40
         }
         depth = speed_depths.get(speed.lower(), self.default_depth)
-        return GameEngineProcess(self.engine_path, depth)
+        return GameEngineProcess(self.engine_path, depth=depth, speed=speed.lower())
 
 
 # ── Lichess Multi-Bot Manager ──────────────────────────────────────────
 class LichessMultiBot:
-    def __init__(self, token: str, engine_path: str, max_games: int = 16, search_depth: int = 7, auto_challenge: bool = True):
+    def __init__(self, token: str, engine_path: str, max_games: int = 16, search_depth: int = 24, auto_challenge: bool = True):
         self.token = token
+        self.engine_path = engine_path
         self.headers = {
             "Authorization": f"Bearer {token}",
             "User-Agent": "TigerFish-Chess-Engine/1.0",
@@ -829,20 +875,33 @@ class LichessMultiBot:
         if total_moves < processed_moves_count:
             return None
 
-        # Compute dynamic time allocation based on clock & increment
-        allocated_time_ms = calculate_search_time(state, my_color)
+        # Compute dynamic time allocation based on clock, increment, speed, and game phase
+        move_number = (total_moves // 2) + 1
+        speed = getattr(engine_proc, "speed", "rapid")
+        allocated_time_ms = calculate_search_time(state, my_color, speed=speed, move_num=move_number)
 
-        # Adaptive search depth ceiling based on time budget
-        search_depth = engine_proc.depth
+        # Adaptive search depth ceiling based on time budget and speed
+        # Allows iterative deepening to search deeply using the allocated time budget
+        max_speed_depth = engine_proc.depth
         if allocated_time_ms is not None:
-            if allocated_time_ms < 200:
-                search_depth = min(search_depth, 6)
-            elif allocated_time_ms < 500:
-                search_depth = min(search_depth, 8)
+            if allocated_time_ms < 150:
+                search_depth = min(max_speed_depth, 8)
+            elif allocated_time_ms < 400:
+                search_depth = min(max_speed_depth, 12)
             elif allocated_time_ms < 1000:
-                search_depth = min(search_depth, 10)
-            elif allocated_time_ms >= 1000:
-                search_depth = max(search_depth, 14)
+                search_depth = min(max_speed_depth, 16)
+            elif allocated_time_ms < 2500:
+                search_depth = min(max_speed_depth, 20)
+            elif allocated_time_ms < 6000:
+                search_depth = min(max_speed_depth, 24)
+            elif allocated_time_ms < 15000:
+                search_depth = min(max_speed_depth, 28)
+            elif allocated_time_ms < 30000:
+                search_depth = min(max_speed_depth, 32)
+            else:
+                search_depth = max_speed_depth
+        else:
+            search_depth = max_speed_depth
 
         start_time = time.time()
         budget_str = f" ({allocated_time_ms}ms budget)" if allocated_time_ms is not None else ""
@@ -918,8 +977,8 @@ def main():
     parser.add_argument("--token", type=str, help="Lichess API Token", default=os.getenv("LICHESS_TOKEN"))
     parser.add_argument("--engine", type=str, help="Path to game.exe", default=DEFAULT_ENGINE_PATH)
     parser.add_argument("--max-games", type=int, help="Max parallel games", default=16)
-    parser.add_argument("--depth", type=int, help="Engine search depth ceiling (default: 12)", default=12)
-    parser.add_argument("--time", type=int, help="Fallback search time budget in ms for untimed games (default: 2000)", default=2000)
+    parser.add_argument("--depth", type=int, help="Engine search depth ceiling (default: 24)", default=24)
+    parser.add_argument("--time", type=int, help="Fallback search time budget in ms for untimed games (default: 3000)", default=3000)
     parser.add_argument("--auto-challenge", action=argparse.BooleanOptionalAction, default=True, help="Automatically seek and challenge online bots to keep 16 parallel games active")
     args = parser.parse_args()
 

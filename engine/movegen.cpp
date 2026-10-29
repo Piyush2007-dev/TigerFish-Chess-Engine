@@ -318,10 +318,12 @@ inline void generate_moves_internal(const Position& pos, MoveList& move_list) no
 
 // ── Public Legal Move Generator Functions ────────────────────────────────────
 inline void generate_legal_moves(const Position& pos, MoveList& move_list) noexcept {
+    PROFILE_ZONE("GenLegalMoves");
     generate_moves_internal<false>(pos, move_list);
 }
 
 inline void generate_captures(const Position& pos, MoveList& move_list) noexcept {
+    PROFILE_ZONE("GenCaptures");
     generate_moves_internal<true>(pos, move_list);
 }
 

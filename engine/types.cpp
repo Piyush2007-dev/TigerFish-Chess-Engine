@@ -20,6 +20,8 @@
     #include <immintrin.h>
 #endif
 
+#include "profiler.h"
+
 namespace tigerfish {
 
 // ── Fundamental Bitboard Type ────────────────────────────────────────────────

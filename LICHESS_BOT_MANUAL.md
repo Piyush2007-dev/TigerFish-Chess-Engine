@@ -57,14 +57,15 @@ python lichess_bot.py --depth 12 --time 2000
 Handles **up to 16 parallel games simultaneously** and actively seeks games against online bots.
 
 ### Features:
-- **Auto-Seeker**: Continuously seeks matches against online bots across 11 time controls (1+0 bullet to 5+3 blitz).
-- **Adaptive Time Manager**: Calculates per-move search budgets (`time_ms`) based on clock and increment to avoid flagging.
+- **Auto-Seeker**: Continuously seeks matches against online bots across weighted time controls (Bullet, Blitz, Rapid, and Classical).
+- **Adaptive Time Manager**: Calculates per-move search budgets (`time_ms`) based on clock, increment, game speed, and move number to avoid flagging while investing full thinking time in critical middlegames.
+- **Deep Adaptive Search**: Dynamically searches up to depth 14-36 (Bullet: 18, Blitz: 24, Rapid: 30, Classical: 36) to utilize allocated budgets instead of exiting prematurely.
 - **Rejection Memory**: Blacklists bots that refuse bot challenges and skips time controls previously declined by specific bots.
 - **Graceful Shutdown**: Pressing `q` + Enter or sending `Ctrl+C` halts new challenges and lets active matches finish cleanly before exiting.
 
 ### Usage Command:
 ```bash
-python lichess_multibot.py --max-games 16 --depth 12
+python lichess_multibot.py --max-games 16 --depth 24
 ```
 
 ---
@@ -86,13 +87,16 @@ For every match, the bridge spawns a dedicated long-running `game.exe interactiv
 
 Both single-bot and multi-bot bridges use `calculate_search_time()` to allocate search budgets dynamically on every move:
 
-1. **Network Lag Buffer**: Deducts 100ms for HTTP transmission latency.
-2. **Standard Allocation**: `usable_time / 25 + (increment * 0.75)`.
-3. **Adaptive Panic Caps**:
-   - Time $< 1.5$s: Capped at 30% of remaining time to prevent flagging.
+1. **Network Lag Buffer**: Deducts 100ms (bullet), 120ms (blitz), or 150ms (rapid/classical) for network transmission latency.
+2. **Speed-Specific Move Time Caps**: Caps single-move search budgets at 4.0s (bullet), 8.0s (blitz), 16.0s (rapid), and 28.0s (classical) to prevent multi-minute freezes on single moves in classical games while maintaining grandmaster-level calculation depth.
+3. **Phase-Aware Opening Budget**: Moves 1–4 allocate a measured budget (400ms–6000ms depending on speed) to develop smoothly without burning massive clock on early setups, saving time for complex middlegames.
+4. **Adaptive Scramble Caps**:
+   - Time $< 1.5$s: Capped at 25% of remaining time to never flag.
    - Time $< 5.0$s: Capped at 25% of remaining time.
-   - Time $\ge 5.0$s: Capped at 20% of remaining time.
-4. **Adaptive Depth**: High depth ceiling (14–16) when clock is healthy; scales down to depth 6–10 in extreme scrambles.
+   - Time $< 15.0$s: Capped at 22% of remaining time.
+   - Time $\ge 15.0$s: 1/25th clock + 75% inc, capped at 20% of remaining time.
+5. **Healthy Time Floors**: When remaining time is plentiful (>30s-60s), ensures a minimum thinking floor (1200ms-2000ms) so the bot never makes instant or superficial moves.
+6. **Adaptive Depth Ceilings**: Scaled dynamically up to depth 36 for classical, depth 30 for rapid, depth 24 for blitz, and depth 18 for bullet, scaling down gracefully to depth 8–12 only during extreme scrambles.
 
 ---
 

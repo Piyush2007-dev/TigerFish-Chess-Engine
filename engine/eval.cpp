@@ -295,6 +295,7 @@ inline void init_eval() noexcept {
 
 // ── Master Tapered Evaluation Function ───────────────────────────────────────
 inline int evaluate(const Position& pos) noexcept {
+    PROFILE_ZONE("Evaluate");
     init_king_shields();
 
     // If an external Reinforcement Learning / neural hook is registered, use it

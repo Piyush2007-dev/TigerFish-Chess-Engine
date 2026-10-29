@@ -25,37 +25,37 @@ import argparse
 # Speed category depth ceilings and network latency buffers
 SPEED_SETTINGS = {
     "ultrabullet": {
-        "depth_ceiling": 8,
+        "depth_ceiling": 14,
         "lag_buffer_ms": 50,
         "panic_threshold_ms": 800,
         "label": "UltraBullet (<30s)",
     },
     "bullet": {
-        "depth_ceiling": 10,
+        "depth_ceiling": 18,
         "lag_buffer_ms": 100,
         "panic_threshold_ms": 1500,
         "label": "Bullet (1m - 2m)",
     },
     "blitz": {
-        "depth_ceiling": 12,
-        "lag_buffer_ms": 100,
+        "depth_ceiling": 24,
+        "lag_buffer_ms": 120,
         "panic_threshold_ms": 2000,
         "label": "Blitz (3m - 5m)",
     },
     "rapid": {
-        "depth_ceiling": 14,
+        "depth_ceiling": 30,
         "lag_buffer_ms": 150,
         "panic_threshold_ms": 3000,
         "label": "Rapid (10m - 15m)",
     },
     "classical": {
-        "depth_ceiling": 16,
+        "depth_ceiling": 36,
         "lag_buffer_ms": 200,
         "panic_threshold_ms": 5000,
         "label": "Classical (20m+)",
     },
     "correspondence": {
-        "depth_ceiling": 18,
+        "depth_ceiling": 40,
         "lag_buffer_ms": 0,
         "panic_threshold_ms": 0,
         "label": "Correspondence / Unlimited",
@@ -64,13 +64,13 @@ SPEED_SETTINGS = {
 
 # Mathematical time allocation parameters
 TIME_ALLOCATION = {
-    "clock_divisor": 25.0,          # Base target: 1/25th of remaining clock per move
-    "increment_factor": 0.75,       # Incorporate 75% of move increment into budget
-    "standard_cap_ratio": 0.20,     # In normal positions, cap move budget at 20% of remaining clock
+    "clock_divisor": 20.0,          # Base target: 1/20th of remaining clock per move
+    "increment_factor": 0.80,       # Incorporate 80% of move increment into budget
+    "standard_cap_ratio": 0.25,     # In normal positions, cap move budget at 25% of remaining clock
     "low_time_cap_ratio": 0.25,     # In low time (<5s), cap at 25% of remaining clock
     "panic_cap_ratio": 0.30,        # In extreme panic (<1.5s), cap at 30% of remaining clock
-    "min_move_time_ms": 50,         # Absolute floor (allows shallow iterative deepening)
-    "default_untimed_ms": 2000,     # Default search time budget if clock is unavailable
+    "min_move_time_ms": 100,        # Absolute floor (allows iterative deepening)
+    "default_untimed_ms": 3000,     # Default search time budget if clock is unavailable
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -232,11 +232,11 @@ def run_startup_test(engine_path: str = None) -> bool:
     print(f"  {'-'*24:<26} {'-'*5:<7} {'-'*8:<10} {'-'*9:<11} {'-'*6:<8} {'-'*6}")
 
     test_cases = [
-        ("Hyperbullet (30s+0)",   8,  200),
-        ("Bullet Scramble (2s+1s)", 8, 250),
-        ("Blitz Move (3m+2s)",   12,  500),
-        ("Rapid Critical (10m)", 14,  800),
-        ("Fixed Shallow Depth",   6,    0),   # 0 = untimed, tests depth-only constraint
+        ("Hyperbullet (30s+0)",   14,  200),
+        ("Bullet Scramble (2s+1s)", 14, 250),
+        ("Blitz Move (3m+2s)",   20,  500),
+        ("Rapid Critical (10m)", 24,  800),
+        ("Fixed Shallow Depth",   8,    0),   # 0 = untimed, tests depth-only constraint
     ]
 
     all_passed = True

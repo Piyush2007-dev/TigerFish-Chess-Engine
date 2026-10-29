@@ -208,6 +208,7 @@ constexpr int SEE_PIECE_VALUES[8] = { 0, 100, 320, 330, 500, 900, 20000, 0 };
 
 // ── Static Exchange Evaluation (SEE) ─────────────────────────────────────────
 inline int see(const Position& pos, Move m) noexcept {
+    PROFILE_ZONE("SEE");
     Square from = m.from();
     Square to = m.to();
     Piece moving_piece = pos.mailbox[from];
@@ -462,6 +463,7 @@ inline void pick_next_best_move(MoveList& moves, int move_scores[], int current_
 // ── Quiescence Search (Tactical Horizon Resolution) ──────────────────────────
 inline int quiescence_search(Position& pos, int alpha, int beta, int ply, int qply,
                              SearchContext& ctx, TranspositionTable& tt) noexcept {
+    PROFILE_ZONE("Quiescence");
     if (ctx.stopped) return 0;
     if ((ctx.nodes & 4095) == 0 && ctx.should_stop()) return 0;
     if (ply >= 120) return evaluate(pos);
@@ -584,6 +586,7 @@ inline int quiescence_search(Position& pos, int alpha, int beta, int ply, int qp
 inline int alpha_beta(Position& pos, int alpha, int beta, int depth, int ply,
                       SearchContext& ctx, TranspositionTable& tt, bool can_null = true,
                       Move excluded_move = MOVE_NONE) noexcept {
+    PROFILE_ZONE("AlphaBeta");
     if (ctx.stopped) return 0;
     if ((ctx.nodes & 4095) == 0 && ctx.should_stop()) return 0;
     if (ply >= 120) return evaluate(pos);
@@ -665,6 +668,7 @@ inline int alpha_beta(Position& pos, int alpha, int beta, int depth, int ply,
     if (can_null && !in_chk && !is_root && !pv_node && depth >= 3 && static_eval >= beta && (beta < SCORE_MATE_BOUND) && excluded_move.is_none()) {
         Bitboard non_pawns = pos.colors[pos.side_to_move] & ~pos.pieces[make_piece(pos.side_to_move, PT_PAWN)] & ~pos.pieces[make_piece(pos.side_to_move, PT_KING)];
         if (non_pawns) {
+            PROFILE_ZONE("NullMovePruning");
             int reduction = 4 + depth / 4 + std::min(3, (static_eval - beta) / 200);
             StateInfo null_state;
             make_null_move(pos, null_state);
@@ -681,6 +685,7 @@ inline int alpha_beta(Position& pos, int alpha, int beta, int depth, int ply,
 
     // 8. ProbCut (Cut subtree if winning capture exceeds high beta threshold)
     if (can_null && !in_chk && !is_root && !pv_node && depth >= 5 && static_eval >= beta + 150 && (beta < SCORE_MATE_BOUND) && excluded_move.is_none()) {
+        PROFILE_ZONE("ProbCut");
         int probcut_beta = beta + 200 - (improving ? 50 : 0);
         MoveList captures;
         generate_captures(pos, captures);
@@ -717,6 +722,7 @@ inline int alpha_beta(Position& pos, int alpha, int beta, int depth, int ply,
     if (!is_root && depth >= 8 && tt_hit && excluded_move.is_none() &&
         tt_entry.depth >= depth - 3 && (tt_entry.bound() & BOUND_LOWER) &&
         std::abs(tt_score) < SCORE_MATE_BOUND) {
+        PROFILE_ZONE("SingularExtension");
 
         int singular_beta = tt_score - 2 * depth;
         int singular_depth = (depth - 1) / 2;
@@ -819,11 +825,14 @@ inline int alpha_beta(Position& pos, int alpha, int beta, int depth, int ply,
     }
 
     int move_scores[256];
-    for (int i = 0; i < move_list.size(); ++i) {
-        if (tt_searched && move_list[i] == tt_move) {
-            move_scores[i] = -999999;
-        } else {
-            move_scores[i] = score_move(pos, move_list[i], MOVE_NONE, ply, ctx);
+    {
+        PROFILE_ZONE("ScoreMoves");
+        for (int i = 0; i < move_list.size(); ++i) {
+            if (tt_searched && move_list[i] == tt_move) {
+                move_scores[i] = -999999;
+            } else {
+                move_scores[i] = score_move(pos, move_list[i], MOVE_NONE, ply, ctx);
+            }
         }
     }
 
@@ -915,7 +924,10 @@ inline int alpha_beta(Position& pos, int alpha, int beta, int depth, int ply,
 
             reduction = std::clamp(reduction, 1, std::max(1, next_depth - 1));
 
-            score = -alpha_beta(pos, -alpha - 1, -alpha, next_depth - reduction, ply + 1, ctx, tt);
+            {
+                PROFILE_ZONE("LMR_ReducedSearch");
+                score = -alpha_beta(pos, -alpha - 1, -alpha, next_depth - reduction, ply + 1, ctx, tt);
+            }
             do_full_search = (score > alpha);
         }
 
@@ -925,6 +937,7 @@ inline int alpha_beta(Position& pos, int alpha, int beta, int depth, int ply,
             } else {
                 score = -alpha_beta(pos, -alpha - 1, -alpha, next_depth, ply + 1, ctx, tt);
                 if (score > alpha && score < beta) {
+                    PROFILE_ZONE("PVS_FullResearch");
                     score = -alpha_beta(pos, -beta, -alpha, next_depth, ply + 1, ctx, tt);
                 }
             }
@@ -1317,6 +1330,7 @@ inline SearchResult search_root_parallel(Position& pos, const SearchLimits& limi
 
 // ── Iterative Deepening & Root Search ────────────────────────────────────────
 inline SearchResult search_position(Position& pos, const SearchLimits& limits, TranspositionTable& tt) {
+    PROFILE_ZONE("SearchPosition");
     if (limits.root_parallel && limits.thread_count > 1) {
         return search_root_parallel(pos, limits, tt);
     }
@@ -1363,6 +1377,9 @@ inline SearchResult search_position(Position& pos, const SearchLimits& limits, T
     for (int current_depth = 1; current_depth <= max_depth; ++current_depth) {
         if (helper_stop.load(std::memory_order_relaxed)) break;
 
+        PROFILE_FRAME("DepthIteration");
+        PROFILE_ZONE("DepthIteration");
+
         // Aspiration Windows with Exponential Widening (depth >= 4)
         int delta = 25;
         int alpha = -SCORE_INFINITY;
@@ -1375,7 +1392,10 @@ inline SearchResult search_position(Position& pos, const SearchLimits& limits, T
 
         int score = 0;
         while (true) {
-            score = alpha_beta(pos, alpha, beta, current_depth, 0, ctx, tt);
+            {
+                PROFILE_ZONE("AspirationSearch");
+                score = alpha_beta(pos, alpha, beta, current_depth, 0, ctx, tt);
+            }
 
             if (ctx.should_stop() || helper_stop.load(std::memory_order_relaxed)) break;
 
@@ -1419,6 +1439,9 @@ inline SearchResult search_position(Position& pos, const SearchLimits& limits, T
             }
         }
 
+        PROFILE_PLOT("Search Depth", current_depth);
+        PROFILE_PLOT("Best Score", score);
+
         // Stop early if checkmate is found
         if (is_mate_score(best_score)) break;
     }
@@ -1447,6 +1470,11 @@ inline SearchResult search_position(Position& pos, const SearchLimits& limits, T
     auto now = std::chrono::steady_clock::now();
     result.time_ms = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count());
     result.nps = (result.time_ms > 0) ? (result.nodes * 1000 / result.time_ms) : result.nodes;
+
+    PROFILE_PLOT("Search Nodes", (int64_t)result.nodes);
+    PROFILE_PLOT("NPS", (int64_t)result.nps);
+    PROFILE_PLOT("TT Hits", (int64_t)result.tt_hits);
+    PROFILE_PLOT("TT Misses", (int64_t)result.tt_misses);
 
     return result;
 }
